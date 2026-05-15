@@ -676,19 +676,19 @@ var SB_BUCKET = 'homework';
 
 // Supabase Storage에 파일 업로드 후 public URL 반환
 async function uploadToSupabase(fileOrBlob, path, mime) {
-  // 경로의 각 세그먼트만 인코딩 (/ 는 유지)
-  var encodedPath = path.split('/').map(function(seg){ return encodeURIComponent(seg); }).join('/');
-  var res = await fetch(SB_URL + '/storage/v1/object/' + SB_BUCKET + '/' + encodedPath, {
+  // 한글 파일명 문제 방지: 경로를 그대로 사용 (Supabase는 UTF-8 경로 지원)
+  var res = await fetch(SB_URL + '/storage/v1/object/' + SB_BUCKET + '/' + path, {
     method:  'POST',
     headers: {
       'Authorization': 'Bearer ' + SB_KEY,
-      'Content-Type':  mime || fileOrBlob.type || 'application/octet-stream',
+      'Content-Type':  mime || (fileOrBlob.type) || 'application/octet-stream',
       'x-upsert':      'true'
     },
     body: fileOrBlob
   });
   if (!res.ok) { var e = await res.text(); throw new Error('업로드 실패: ' + e); }
-  return SB_URL + '/storage/v1/object/public/' + SB_BUCKET + '/' + encodedPath;
+  // public URL도 인코딩 없이 반환
+  return SB_URL + '/storage/v1/object/public/' + SB_BUCKET + '/' + path;
 }
 
 // base64 문자열 → Blob 변환
@@ -1815,9 +1815,10 @@ async function sendToSheet(winner) {
   var prizeName = winner ? (winner.prize || '') : '';
 
   // 파일 경로 prefix: 반이름/차시/회차/
-  var safeClass = d.record.className.replace(/\//g, '_').replace(/\s/g, '_');
-  var safeChasi = String(d.week).replace(/\s/g, '_');
-  var prefix    = safeClass + '/' + safeChasi + '/' + d.slot + '회차/';
+  var safeClass = d.record.className.replace(/[^a-zA-Z0-9]/g, '_');
+  var safeChasi = String(d.week).replace(/[^a-zA-Z0-9]/g, '_');
+  var safeName  = d.name.replace(/[^a-zA-Z0-9]/g, '_') || 'student';
+  var prefix    = safeClass + '/' + safeChasi + '/' + d.slot + '_slot/';
   var timestamp = Date.now();
 
   var photoUrls = [];
@@ -1833,7 +1834,7 @@ async function sendToSheet(winner) {
       setUploadProgress('사진 업로드 중 (' + (pi+1) + '/' + validImgs.length + ')', Math.round((pi / (validImgs.length + (d.validVids||[]).length)) * 100));
       try {
         var ext      = imgObj.mime === 'image/jpeg' ? 'jpg' : 'png';
-        var filePath = prefix + d.name + '_' + timestamp + '_' + (pi+1) + '.' + ext;
+        var filePath = prefix + safeName + '_' + timestamp + '_' + (pi+1) + '.' + ext;
         var b64      = imgObj.data.indexOf(',') !== -1 ? imgObj.data.split(',')[1] : imgObj.data;
         var blob     = b64toBlob(b64, imgObj.mime);
         var pubUrl   = await uploadToSupabase(blob, filePath, imgObj.mime);
@@ -1848,7 +1849,7 @@ async function sendToSheet(winner) {
       setUploadProgress('동영상 업로드 중...', Math.round(((validImgs.length + vi) / (validImgs.length + validVids.length)) * 100));
       try {
         var vidExt  = vidFile.name ? vidFile.name.split('.').pop() : 'mp4';
-        var vidPath = prefix + d.name + '_' + timestamp + '_video_' + (vi+1) + '.' + vidExt;
+        var vidPath = prefix + safeName + '_' + timestamp + '_video_' + (vi+1) + '.' + vidExt;
         var vidUrl  = await uploadToSupabase(vidFile, vidPath, vidFile.type);
         videoUrls.push(vidUrl);
       } catch(e) { console.warn('동영상 업로드 실패:', e); }
