@@ -367,13 +367,23 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
   </div>
 
   <div class="card">
-    <div class="card-title"><div class="cicon ci-purple">📸</div> 숙제 사진 업로드</div>
+    <div class="card-title"><div class="cicon ci-purple">📸</div> 숙제 사진/동영상 업로드</div>
     <div class="drop-zone" id="dropZone">
-      <input type="file" id="fileInput" accept="image/*" multiple>
+      <input type="file" id="fileInput" accept="image/*,video/*" multiple>
       <span class="drop-icon" id="dropIcon">📎</span>
-      <div class="drop-text" id="dropText">사진 클릭 또는 드래그 (최대 10장)</div>
-      <div class="drop-sub" id="dropSub">최대 10장 · JPG · PNG · HEIC</div>
+      <div class="drop-text" id="dropText">사진/동영상 클릭 또는 드래그</div>
+      <div class="drop-sub" id="dropSub">사진 최대 10장 · 동영상 최대 1개 · JPG · PNG · MP4</div>
       <div id="previewGrid" style="display:none;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px;margin-top:8px;"></div>
+    </div>
+    <!-- 업로드 진행바 -->
+    <div id="uploadProgressWrap" style="display:none;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px;">
+        <span id="uploadProgressLabel">업로드 중...</span>
+        <span id="uploadProgressPct">0%</span>
+      </div>
+      <div style="height:6px;background:var(--sf2);border-radius:10px;overflow:hidden;">
+        <div id="uploadProgressBar" style="height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:10px;width:0%;transition:width .3s;"></div>
+      </div>
     </div>
     <button class="btn-primary" id="submitBtn" onclick="submitHomework()">
       <span id="btnTxt">✅ 제출하기</span>
@@ -643,6 +653,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
       <button onclick="nextPhoto()" style="background:var(--sf2);border:1.5px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:16px;">›</button>
     </div>
     <img id="modalImg" src="" alt="" style="max-width:100%;border-radius:12px;max-height:420px;object-fit:contain;display:block;margin:0 auto;">
+    <video id="modalVideo" src="" controls style="max-width:100%;border-radius:12px;max-height:420px;display:none;margin:0 auto;"></video>
     <div style="display:flex;gap:8px;margin-top:10px;justify-content:center;">
       <button onclick="openCurrentPhoto()" style="background:var(--accent);color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;">🔗 새 탭으로 열기</button>
       <button onclick="closeModal()" style="background:var(--sf2);border:1.5px solid var(--border);border-radius:8px;padding:7px 16px;font-size:12px;font-weight:700;cursor:pointer;">✕ 닫기</button>
@@ -657,6 +668,48 @@ var CAT_IMG = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQ
 // ── STORAGE ──
 function load(k, d) { try { return JSON.parse(localStorage.getItem(k)) != null ? JSON.parse(localStorage.getItem(k)) : d; } catch(e) { return d; } }
 function save(k, v) { localStorage.setItem(k, JSON.stringify(v)); }
+
+// ── SUPABASE 설정 ──
+var SB_URL    = 'https://vvbanjdioahaaqamibbh.supabase.co';
+var SB_KEY    = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ2YmFuamRpb2FoYWFxYW1pYmJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzAzOTYsImV4cCI6MjA5MTQwNjM5Nn0.gKFDN93mmaKhVH-Quw69bZl9AYaVp_b4aJ02oT9C-Bc';
+var SB_BUCKET = 'homework';
+
+// Supabase Storage에 파일 업로드 후 public URL 반환
+async function uploadToSupabase(fileOrBlob, path, mime) {
+  // 경로의 각 세그먼트만 인코딩 (/ 는 유지)
+  var encodedPath = path.split('/').map(function(seg){ return encodeURIComponent(seg); }).join('/');
+  var res = await fetch(SB_URL + '/storage/v1/object/' + SB_BUCKET + '/' + encodedPath, {
+    method:  'POST',
+    headers: {
+      'Authorization': 'Bearer ' + SB_KEY,
+      'Content-Type':  mime || fileOrBlob.type || 'application/octet-stream',
+      'x-upsert':      'true'
+    },
+    body: fileOrBlob
+  });
+  if (!res.ok) { var e = await res.text(); throw new Error('업로드 실패: ' + e); }
+  return SB_URL + '/storage/v1/object/public/' + SB_BUCKET + '/' + encodedPath;
+}
+
+// base64 문자열 → Blob 변환
+function b64toBlob(b64, mime) {
+  var byteStr = atob(b64);
+  var ab = new ArrayBuffer(byteStr.length);
+  var ia = new Uint8Array(ab);
+  for (var i = 0; i < byteStr.length; i++) ia[i] = byteStr.charCodeAt(i);
+  return new Blob([ab], {type: mime});
+}
+
+// 진행바 표시
+function setUploadProgress(label, pct) {
+  var wrap = document.getElementById('uploadProgressWrap');
+  if (!wrap) return;
+  if (pct < 0) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  document.getElementById('uploadProgressLabel').textContent = label;
+  document.getElementById('uploadProgressPct').textContent   = pct + '%';
+  document.getElementById('uploadProgressBar').style.width   = pct + '%';
+}
 
 // ── STATE ──
 // classes: [{id, name, deadlines: {1:{date,time}, 2:{date,time}, 3:{date,time}}}]
@@ -680,6 +733,7 @@ var pendingSubmitData  = null; // 시트 전송 대기 데이터
 var sheetSentFlag     = false; // 중복 전송 방지
 var selectedClass   = null;
 var uploadedImages  = [];  // 다중 사진
+var uploadedVideos  = [];  // 동영상 (최대 1개)
 var currentFilter   = 'all';
 var currentClassFilter = 'all';
 var pwBuffer        = '';
@@ -1004,57 +1058,80 @@ function compressImage(dataUrl, callback) {
 }
 
 function handleFiles(files) {
-  var maxFiles = 10;
-  var fileArr = Array.from(files).slice(0, maxFiles);
+  var maxImages = 10;
+  var fileArr   = Array.from(files);
+
+  // 이미지 / 동영상 분리
+  var imgFiles = fileArr.filter(function(f){ return f.type.startsWith('image/'); }).slice(0, maxImages);
+  var vidFiles = fileArr.filter(function(f){ return f.type.startsWith('video/'); }).slice(0, 1); // 동영상 1개
+
   uploadedImages = [];
+  uploadedVideos = vidFiles; // 원본 File 객체 보관
+
   var grid = document.getElementById('previewGrid');
   grid.innerHTML = '';
   grid.style.display = 'grid';
   document.getElementById('dropIcon').style.display = 'none';
-  document.getElementById('dropText').textContent = fileArr.length + '장 선택됨';
-  document.getElementById('dropSub').textContent = '최대 10장까지 가능합니다';
+  var totalCount = imgFiles.length + vidFiles.length;
+  document.getElementById('dropText').textContent = totalCount + '개 선택됨';
+  document.getElementById('dropSub').textContent  = '사진 ' + imgFiles.length + '장' + (vidFiles.length ? ' · 동영상 ' + vidFiles.length + '개' : '');
   document.getElementById('resultCard').className = 'result-card';
 
-  var loaded = 0;
+  // 동영상 썸네일
+  vidFiles.forEach(function(vf, vi) {
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative;';
+    var thumb = document.createElement('div');
+    thumb.style.cssText = 'width:100%;height:72px;border-radius:8px;border:1.5px solid var(--accent);background:#000;display:flex;align-items:center;justify-content:center;font-size:28px;';
+    thumb.textContent = '🎬';
+    var label = document.createElement('div');
+    label.style.cssText = 'position:absolute;top:3px;left:3px;background:var(--accent);color:#fff;border-radius:5px;font-size:10px;font-weight:700;padding:1px 5px;';
+    label.textContent = '동영상';
+    var delBtn = document.createElement('div');
+    delBtn.style.cssText = 'position:absolute;top:3px;right:3px;background:rgba(0,0,0,.5);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;';
+    delBtn.textContent = '✕';
+    delBtn.onclick = (function(idx){ return function(){
+      uploadedVideos[idx] = null;
+      wrap.remove();
+      var remaining = uploadedImages.filter(function(x){ return x; }).length + uploadedVideos.filter(function(x){ return x; }).length;
+      document.getElementById('dropText').textContent = remaining + '개 선택됨';
+      checkSubmitReady();
+    }; })(vi);
+    wrap.appendChild(thumb); wrap.appendChild(label); wrap.appendChild(delBtn);
+    grid.appendChild(wrap);
+  });
 
-  fileArr.forEach(function(file, i) {
+  // 이미지 썸네일
+  var loaded = 0;
+  if (imgFiles.length === 0) { checkSubmitReady(); return; }
+
+  imgFiles.forEach(function(file, i) {
     var reader = new FileReader();
     reader.onload = function(e) {
       compressImage(e.target.result, function(compressed) {
-        uploadedImages[i] = { data: compressed, mime: 'image/jpeg' };
+        uploadedImages[i] = { data: compressed, mime: 'image/jpeg', file: file };
         loaded++;
-
-        // 썸네일
         var wrap = document.createElement('div');
         wrap.style.cssText = 'position:relative;';
-
         var thumb = document.createElement('img');
         thumb.src = compressed;
         thumb.style.cssText = 'width:100%;height:72px;object-fit:cover;border-radius:8px;border:1.5px solid var(--border);';
-
         var num = document.createElement('div');
         num.style.cssText = 'position:absolute;top:3px;left:3px;background:var(--accent);color:#fff;border-radius:5px;font-size:10px;font-weight:700;padding:1px 5px;';
         num.textContent = String(i + 1);
-
         var delBtn = document.createElement('div');
         delBtn.style.cssText = 'position:absolute;top:3px;right:3px;background:rgba(0,0,0,.5);color:#fff;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:10px;cursor:pointer;';
         delBtn.textContent = '✕';
-        delBtn.onclick = (function(idx) {
-          return function() {
-            uploadedImages[idx] = null;
-            wrap.remove();
-            var remaining = uploadedImages.filter(function(x) { return x; }).length;
-            document.getElementById('dropText').textContent = remaining + '장 선택됨';
-            checkSubmitReady();
-          };
-        })(i);
-
-        wrap.appendChild(thumb);
-        wrap.appendChild(num);
-        wrap.appendChild(delBtn);
+        delBtn.onclick = (function(idx){ return function(){
+          uploadedImages[idx] = null;
+          wrap.remove();
+          var remaining = uploadedImages.filter(function(x){ return x; }).length + uploadedVideos.filter(function(x){ return x; }).length;
+          document.getElementById('dropText').textContent = remaining + '개 선택됨';
+          checkSubmitReady();
+        }; })(i);
+        wrap.appendChild(thumb); wrap.appendChild(num); wrap.appendChild(delBtn);
         grid.appendChild(wrap);
-
-        if (loaded === fileArr.length) checkSubmitReady();
+        if (loaded === imgFiles.length) checkSubmitReady();
       });
     };
     reader.readAsDataURL(file);
@@ -1123,7 +1200,8 @@ async function submitHomework() {
   }
 
   var validImgs = uploadedImages.filter(function(x){ return x; });
-  if (validImgs.length === 0) { showResult('fail','⚠️','사진을 선택해주세요','숙제 사진을 업로드해주세요!'); return; }
+  var validVids = uploadedVideos.filter(function(x){ return x; });
+  if (validImgs.length === 0 && validVids.length === 0) { showResult('fail','⚠️','파일을 선택해주세요','숙제 사진 또는 동영상을 업로드해주세요!'); return; }
 
   var now  = new Date();
   var late = isLate(selectedClass.id, nextSlot);
@@ -1160,6 +1238,7 @@ async function submitHomework() {
   }
 
   uploadedImages = [];
+  uploadedVideos = [];
   selectedSlot = null;
   document.getElementById('previewGrid').innerHTML='';
   document.getElementById('previewGrid').style.display='none';
@@ -1174,7 +1253,8 @@ async function submitHomework() {
     record: record,
     name: name, phone: phone, slot: nextSlot,
     week: WEEK, late: late,
-    validImgs: validImgs.filter(function(x){ return x; })
+    validImgs: validImgs.filter(function(x){ return x; }),
+    validVids: uploadedVideos.filter(function(x){ return x; })
   };
   sheetSentFlag = false; // 전송 플래그 초기화
 
@@ -1550,12 +1630,20 @@ function showPhoto(id) {
 
 function updatePhotoModal() {
   var url = _photoUrls[_photoIdx];
-  // 구글드라이브 미리보기 URL로 변환
+  // Supabase URL은 그대로, 구글드라이브 URL만 변환
   var previewUrl = url;
   var match = url.match(/\/file\/d\/([^\/]+)/);
   if (match) previewUrl = 'https://drive.google.com/uc?export=view&id=' + match[1];
 
   document.getElementById('modalImg').src = previewUrl;
+  // 동영상 URL인지 체크
+  var isVideo = /\.(mp4|mov|avi|webm|mkv)/i.test(url);
+  document.getElementById('modalImg').style.display = isVideo ? 'none' : 'block';
+  var vidEl = document.getElementById('modalVideo');
+  if (vidEl) {
+    vidEl.style.display = isVideo ? 'block' : 'none';
+    if (isVideo) { vidEl.src = previewUrl; }
+  }
   document.getElementById('photoCounter').textContent =
     (_photoIdx + 1) + ' / ' + _photoUrls.length + '장';
 }
@@ -1715,59 +1803,94 @@ function burstItems() {
   setTimeout(function(){ container.classList.remove('burst'); container.innerHTML=''; }, 1200);
 }
 
-// ── 구글 시트로 전송 (뽑기 결과 포함) ──
+// ── Supabase Storage 업로드 + 구글 시트 기록 ──
 async function sendToSheet(winner) {
   if (!pendingSubmitData) return;
-  if (sheetSentFlag) return; // 이미 전송됨
+  if (sheetSentFlag) return;
   sheetSentFlag = true;
-  var d      = pendingSubmitData;
-  var url    = scriptUrl || load('hw_scriptUrl', '');
-  if (!url) { sheetSentFlag = false; return; }
+  var d = pendingSubmitData;
+  var url = scriptUrl || load('hw_scriptUrl', '');
 
-  var prizeRank  = winner ? winner.rank  : '';
-  var prizeName  = winner ? (winner.prize||'') : '';
+  var prizeRank = winner ? winner.rank  : '';
+  var prizeName = winner ? (winner.prize || '') : '';
+
+  // 파일 경로 prefix: 반이름/차시/회차/
+  var safeClass = d.record.className.replace(/\//g, '_').replace(/\s/g, '_');
+  var safeChasi = String(d.week).replace(/\s/g, '_');
+  var prefix    = safeClass + '/' + safeChasi + '/' + d.slot + '회차/';
+  var timestamp = Date.now();
+
+  var photoUrls = [];
+  var videoUrls = [];
 
   try {
-    document.getElementById('btnTxt').innerHTML = '<span class="spinner"></span> 저장 중...';
+    document.getElementById('btnTxt').innerHTML = '<span class="spinner"></span> 업로드 중...';
 
-    // 1단계: 텍스트 + 뽑기결과 한번에 전송
-    await fetch(url, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {'Content-Type':'text/plain'},
-      body: JSON.stringify({
-        time: d.record.time, className: d.record.className,
-        name: d.name, phone: d.phone, slot: d.slot,
-        week: d.week, late: d.late, deadlineStr: d.record.deadlineStr,
-        imageBase64: '', mimeType: '',
-        prizeRank: prizeRank, prizeName: prizeName
-      })
-    });
+    // ── 1단계: 이미지 Supabase 업로드 ──
+    var validImgs = d.validImgs.filter(function(x){ return x; });
+    for (var pi = 0; pi < validImgs.length; pi++) {
+      var imgObj = validImgs[pi];
+      setUploadProgress('사진 업로드 중 (' + (pi+1) + '/' + validImgs.length + ')', Math.round((pi / (validImgs.length + (d.validVids||[]).length)) * 100));
+      try {
+        var ext      = imgObj.mime === 'image/jpeg' ? 'jpg' : 'png';
+        var filePath = prefix + d.name + '_' + timestamp + '_' + (pi+1) + '.' + ext;
+        var b64      = imgObj.data.indexOf(',') !== -1 ? imgObj.data.split(',')[1] : imgObj.data;
+        var blob     = b64toBlob(b64, imgObj.mime);
+        var pubUrl   = await uploadToSupabase(blob, filePath, imgObj.mime);
+        photoUrls.push(pubUrl);
+      } catch(e) { console.warn('이미지 업로드 실패:', e); }
+    }
 
-    // 2단계: 사진 전송
-    for (var pi=0; pi<d.validImgs.length; pi++) {
-      var imgObj    = d.validImgs[pi];
-      if (!imgObj) continue;
-      var imgBase64 = imgObj.data.indexOf(',') !== -1 ? imgObj.data.split(',')[1] : imgObj.data;
+    // ── 2단계: 동영상 Supabase 업로드 ──
+    var validVids = (d.validVids || []).filter(function(x){ return x; });
+    for (var vi = 0; vi < validVids.length; vi++) {
+      var vidFile = validVids[vi];
+      setUploadProgress('동영상 업로드 중...', Math.round(((validImgs.length + vi) / (validImgs.length + validVids.length)) * 100));
+      try {
+        var vidExt  = vidFile.name ? vidFile.name.split('.').pop() : 'mp4';
+        var vidPath = prefix + d.name + '_' + timestamp + '_video_' + (vi+1) + '.' + vidExt;
+        var vidUrl  = await uploadToSupabase(vidFile, vidPath, vidFile.type);
+        videoUrls.push(vidUrl);
+      } catch(e) { console.warn('동영상 업로드 실패:', e); }
+    }
+
+    setUploadProgress('구글 시트에 기록 중...', 95);
+
+    // ── 3단계: 구글 시트 전송 (URL만 보냄, base64 없음) ──
+    if (url) {
       try {
         await fetch(url, {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: {'Content-Type':'text/plain'},
-          body: JSON.stringify({
-            time: d.record.time, className: d.record.className,
-            name: d.name, phone: d.phone, slot: d.slot,
-            week: d.week, late: d.late, deadlineStr: d.record.deadlineStr,
-            imageBase64: imgBase64, mimeType: imgObj.mime || 'image/jpeg',
-            photoIndex: pi+1, photoTotal: d.validImgs.length,
-            prizeRank: prizeRank, prizeName: prizeName
+          method:  'POST',
+          mode:    'no-cors',
+          headers: {'Content-Type': 'text/plain'},
+          body:    JSON.stringify({
+            time:        d.record.time,
+            className:   d.record.className,
+            name:        d.name,
+            phone:       d.phone,
+            slot:        d.slot,
+            week:        d.week,
+            late:        d.late,
+            deadlineStr: d.record.deadlineStr,
+            imageBase64: '',
+            mimeType:    '',
+            photoUrls:   photoUrls,
+            videoUrls:   videoUrls,
+            prizeRank:   prizeRank,
+            prizeName:   prizeName
           })
         });
-      } catch(e) { console.warn('사진 전송 실패:', e); }
+      } catch(e) { console.warn('시트 전송 실패:', e); }
     }
+
+    setUploadProgress('완료!', 100);
+    setTimeout(function(){ setUploadProgress('', -1); }, 1000);
+
   } catch(e) {
-    console.warn('시트 전송 실패:', e);
+    console.warn('sendToSheet 오류:', e);
+    setUploadProgress('', -1);
   }
+
   pendingSubmitData = null;
   document.getElementById('btnTxt').innerHTML = '✅ 제출하기';
 }
