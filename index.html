@@ -372,7 +372,7 @@ body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text
       <input type="file" id="fileInput" accept="image/*,video/*" multiple>
       <span class="drop-icon" id="dropIcon">📎</span>
       <div class="drop-text" id="dropText">사진/동영상 클릭 또는 드래그</div>
-      <div class="drop-sub" id="dropSub">사진 최대 10장 · 동영상 최대 1개 · JPG · PNG · MP4</div>
+      <div class="drop-sub" id="dropSub">사진 최대 30장 · 동영상 최대 1개 · JPG · PNG · MP4</div>
       <div id="previewGrid" style="display:none;grid-template-columns:repeat(auto-fill,minmax(80px,1fr));gap:6px;margin-top:8px;"></div>
     </div>
     <!-- 업로드 진행바 -->
@@ -1058,7 +1058,7 @@ function compressImage(dataUrl, callback) {
 }
 
 function handleFiles(files) {
-  var maxImages = 10;
+  var maxImages = 30;
   var fileArr   = Array.from(files);
 
   // 이미지 / 동영상 분리
@@ -1827,11 +1827,40 @@ async function sendToSheet(winner) {
   try {
     document.getElementById('btnTxt').innerHTML = '<span class="spinner"></span> 업로드 중...';
 
-    // ── 1단계: 이미지 Supabase 업로드 ──
+    // ── 1단계: 구글 시트에 먼저 기록 (사진 없이) ──
+    // 사진 업로드 성공 여부와 무관하게 제출 기록은 항상 남김
+    setUploadProgress('제출 기록 중...', 10);
+    if (url) {
+      try {
+        await fetch(url, {
+          method:  'POST',
+          mode:    'no-cors',
+          headers: {'Content-Type': 'text/plain'},
+          body:    JSON.stringify({
+            time:        d.record.time,
+            className:   d.record.className,
+            name:        d.name,
+            phone:       d.phone,
+            slot:        d.slot,
+            week:        d.week,
+            late:        d.late,
+            deadlineStr: d.record.deadlineStr,
+            imageBase64: '',
+            mimeType:    '',
+            photoUrls:   [],
+            videoUrls:   [],
+            prizeRank:   prizeRank,
+            prizeName:   prizeName
+          })
+        });
+      } catch(e) { console.warn('시트 1차 전송 실패:', e); }
+    }
+
+    // ── 2단계: 이미지 Supabase 업로드 ──
     var validImgs = d.validImgs.filter(function(x){ return x; });
     for (var pi = 0; pi < validImgs.length; pi++) {
       var imgObj = validImgs[pi];
-      setUploadProgress('사진 업로드 중 (' + (pi+1) + '/' + validImgs.length + ')', Math.round((pi / (validImgs.length + (d.validVids||[]).length)) * 100));
+      setUploadProgress('사진 업로드 중 (' + (pi+1) + '/' + validImgs.length + ')', Math.round(10 + (pi / (validImgs.length + (d.validVids||[]).length)) * 80));
       try {
         var ext      = imgObj.mime === 'image/jpeg' ? 'jpg' : 'png';
         var filePath = prefix + safeName + '_' + timestamp + '_' + (pi+1) + '.' + ext;
@@ -1842,11 +1871,11 @@ async function sendToSheet(winner) {
       } catch(e) { console.warn('이미지 업로드 실패:', e); }
     }
 
-    // ── 2단계: 동영상 Supabase 업로드 ──
+    // ── 3단계: 동영상 Supabase 업로드 ──
     var validVids = (d.validVids || []).filter(function(x){ return x; });
     for (var vi = 0; vi < validVids.length; vi++) {
       var vidFile = validVids[vi];
-      setUploadProgress('동영상 업로드 중...', Math.round(((validImgs.length + vi) / (validImgs.length + validVids.length)) * 100));
+      setUploadProgress('동영상 업로드 중...', Math.round(10 + ((validImgs.length + vi) / (validImgs.length + validVids.length)) * 80));
       try {
         var vidExt  = vidFile.name ? vidFile.name.split('.').pop() : 'mp4';
         var vidPath = prefix + safeName + '_' + timestamp + '_video_' + (vi+1) + '.' + vidExt;
@@ -1855,10 +1884,9 @@ async function sendToSheet(winner) {
       } catch(e) { console.warn('동영상 업로드 실패:', e); }
     }
 
-    setUploadProgress('구글 시트에 기록 중...', 95);
-
-    // ── 3단계: 구글 시트 전송 (URL만 보냄, base64 없음) ──
-    if (url) {
+    // ── 4단계: 사진 URL 업데이트 (업로드 성공한 경우만) ──
+    if (url && (photoUrls.length > 0 || videoUrls.length > 0)) {
+      setUploadProgress('사진 링크 업데이트 중...', 95);
       try {
         await fetch(url, {
           method:  'POST',
@@ -1878,10 +1906,11 @@ async function sendToSheet(winner) {
             photoUrls:   photoUrls,
             videoUrls:   videoUrls,
             prizeRank:   prizeRank,
-            prizeName:   prizeName
+            prizeName:   prizeName,
+            updatePhotos: true   // 기존 행 사진 업데이트 플래그
           })
         });
-      } catch(e) { console.warn('시트 전송 실패:', e); }
+      } catch(e) { console.warn('사진 URL 업데이트 실패:', e); }
     }
 
     setUploadProgress('완료!', 100);
