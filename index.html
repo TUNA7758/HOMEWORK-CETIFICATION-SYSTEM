@@ -1395,12 +1395,14 @@ function setClassFilter(id, el) {
 
 function getFilteredSubs() {
   var WEEK = getWeekKey();
-  var s = submissions.filter(function(s){ return s.week===WEEK || s.week==='미설정'; });
-  if (currentClassFilter!=='all') {
-    // classId 또는 className으로 비교 (구글시트 연동 시 className으로 옴)
+  // 이번 주 차시 + 미설정 모두 포함
+  var s = submissions.filter(function(s){
+    return s.week === WEEK || s.week === '미설정' || !s.week;
+  });
+  if (currentClassFilter !== 'all') {
     var cls = classes.find(function(c){ return c.id === currentClassFilter; });
     var clsName = cls ? cls.name : currentClassFilter;
-    s = s.filter(function(s){ return s.classId===currentClassFilter || s.className===clsName; });
+    s = s.filter(function(s){ return s.classId === currentClassFilter || s.className === clsName; });
   }
   return s;
 }
@@ -1408,8 +1410,9 @@ function getFilteredSubs() {
 function getStudentMap(subs) {
   var map = {};
   subs.forEach(function(s){
-    if (!map[s.key]) map[s.key]={key:s.key,name:s.name,phone:s.phone,className:s.className,classId:s.classId,subs:[]};
-    map[s.key].subs.push(s);
+    var k = s.className + '_' + s.name + '_' + (s.phone||'');
+    if (!map[k]) map[k] = {key:k, name:s.name, phone:s.phone, className:s.className, classId:s.classId, subs:[]};
+    map[k].subs.push(s);
   });
   return Object.values(map);
 }
@@ -1488,7 +1491,7 @@ function renderTable() {
   var rows = getStudentMap(getFilteredSubs()).map(function(st){
     return Object.assign({}, st, {lateCount: st.subs.filter(function(s){ return s.late; }).length, count: st.subs.length});
   });
-  if (currentFilter==='done') rows=rows.filter(function(r){ return r.count>=3&&r.lateCount===0; });
+  if (currentFilter==='done') rows=rows.filter(function(r){ return r.count>=3; });
   else if (currentFilter==='late') rows=rows.filter(function(r){ return r.lateCount>0; });
   else if (currentFilter==='miss') rows=rows.filter(function(r){ return r.count<3; });
 
@@ -1824,6 +1827,13 @@ async function sendToSheet(winner) {
   var photoUrls = [];
   var videoUrls = [];
 
+  // 안전장치: 40초 후 강제 완료 처리
+  var safetyTimer = setTimeout(function(){
+    setUploadProgress('', -1);
+    pendingSubmitData = null;
+    document.getElementById('btnTxt').innerHTML = '✅ 제출하기';
+  }, 40000);
+
   try {
     document.getElementById('btnTxt').innerHTML = '<span class="spinner"></span> 업로드 중...';
 
@@ -1914,10 +1924,12 @@ async function sendToSheet(winner) {
     }
 
     setUploadProgress('완료!', 100);
+    clearTimeout(safetyTimer);
     setTimeout(function(){ setUploadProgress('', -1); }, 1000);
 
   } catch(e) {
     console.warn('sendToSheet 오류:', e);
+    clearTimeout(safetyTimer);
     setUploadProgress('', -1);
   }
 
