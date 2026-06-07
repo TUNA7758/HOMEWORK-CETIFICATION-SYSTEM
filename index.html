@@ -360,7 +360,7 @@ function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 var classes=[],prizes=[],studentsList=[],submissions=[];
 var selectedClass=null,selectedSlot=null;
 var uploadedImages=[],uploadedVideos=[];
-var scriptUrl=load('hw_scriptUrl','');
+var scriptUrl = 'https://script.google.com/macros/s/AKfycbyMVn6roYbiOKcM0VX7-x45LlKJBKFlEIRDETYDT6__g-TBsL5FnAmPoFU5bxiQbfI3Jg/exec';
 var currentFilter='all',currentCF='all';
 var pwBuffer='',teacherUnlocked=load('hw_teacher_unlocked',false);
 var confirmCb=null,photoUrls_m=[],photoIdx_m=0;
@@ -409,6 +409,26 @@ function selectClass(id){
   var btn=document.querySelector('.class-btn[data-id="'+id+'"]');
   if(btn)btn.classList.add('selected');
   updateHero();renderWeekSlots();renderSlotBtns();checkReady();
+  // 선택한 반의 제출 내역 불러오기 (앱 재실행 후 중복제출 방지)
+  if(!teacherUnlocked&&selectedClass) loadClassSubmissions(selectedClass.name);
+}
+
+// 학생용: 선택한 반의 제출 내역만 불러오기
+function loadClassSubmissions(className){
+  if(!scriptUrl)return;
+  fetch(scriptUrl+'?action=getSubmissions&className='+encodeURIComponent(className),{redirect:'follow'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.success&&d.submissions){
+        // 다른 반 제출은 유지하고 이 반 것만 갱신
+        submissions=submissions.filter(function(s){return s.className!==className;});
+        d.submissions.forEach(function(s){
+          submissions.push({className:s.className,classId:s.className,name:s.name,phone:s.phone,slot:Number(s.slot),week:s.week,late:s.late==='지각',time:s.time,deadlineStr:s.deadline,prize:s.prize,photoUrls:s.photoUrls||[],videoUrls:s.videoUrls||[],sheetRow:s.row,key:s.className+'_'+s.name+'_'+(s.phone||'')});
+        });
+        renderWeekSlots();renderSlotBtns();
+      }
+    })
+    .catch(function(){});
 }
 
 // ── 히어로 ──
@@ -575,15 +595,20 @@ async function submitHomework(){
 }
 
 async function doUploadAndSave(record,validImgs,validVids,name,phone,late,timeStr,dlStr,WEEK){
-  var url=scriptUrl||load('hw_scriptUrl','');
+  var url=scriptUrl;
   var photoUrls=[],videoUrls=[];
+  // 뽑기를 먼저 뽑아서 시트 기록에 포함 (화면 표시는 finishSubmit에서)
+  var winner=pickWinner();
+  pendingWinner=winner;
+  var prizeRank=winner?winner.rank:'';
+  var prizeName=winner?(winner.prize||''):'';
   // 안전장치: 60초 후 강제완료
   var safety=setTimeout(function(){finishSubmit(record,photoUrls,videoUrls,late,dlStr);},60000);
   try{
-    // STEP1: 시트 먼저 기록
+    // STEP1: 시트 먼저 기록 (뽑기 결과 포함)
     setProgress('기록 중...',5);
     if(url){
-      try{await postSheet(url,{time:timeStr,className:record.className,name:name,phone:phone,slot:record.slot,week:WEEK,late:late,deadlineStr:dlStr,imageBase64:'',mimeType:'',photoUrls:[],videoUrls:[],prizeRank:'',prizeName:''});}
+      try{await postSheet(url,{time:timeStr,className:record.className,name:name,phone:phone,slot:record.slot,week:WEEK,late:late,deadlineStr:dlStr,imageBase64:'',mimeType:'',photoUrls:[],videoUrls:[],prizeRank:prizeRank,prizeName:prizeName});}
       catch(e){console.warn('시트 기록 실패',e);}
     }
     // STEP2: Supabase 사진 업로드
@@ -611,7 +636,7 @@ async function doUploadAndSave(record,validImgs,validVids,name,phone,late,timeSt
         videoUrls.push(pubUrl);
       }catch(e){console.warn('동영상 업로드 실패',e);}
     }
-    // STEP3: URL 업데이트 (사진이 있을 때만)
+    // STEP3: 사진 URL 업데이트 (사진이 있을 때만)
     if(url&&(photoUrls.length||videoUrls.length)){
       setProgress('링크 업데이트...',95);
       try{await postSheet(url,{time:timeStr,className:record.className,name:name,phone:phone,slot:record.slot,week:WEEK,late:late,deadlineStr:dlStr,imageBase64:'',mimeType:'',photoUrls:photoUrls,videoUrls:videoUrls,updatePhotos:true,prizeRank:'',prizeName:''});}
@@ -629,7 +654,6 @@ async function doUploadAndSave(record,validImgs,validVids,name,phone,late,timeSt
 function finishSubmit(record,photoUrls,videoUrls,late,dlStr){
   record.photoUrls=photoUrls;record.videoUrls=videoUrls;
   setProgress('',-1);
-  var winner=pickWinner();pendingWinner=winner;
   renderWeekSlots();renderSlotBtns();
   if(late)showResult('late','⚠️',record.slot+'회차 완료 (지각)','마감이 지났지만 제출됐어요!');
   else showResult('success','✅',record.slot+'회차 인증 완료! 🎉',dlStr+' 내에 제출했어요 👍');
