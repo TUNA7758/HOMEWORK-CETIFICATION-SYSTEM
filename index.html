@@ -156,6 +156,13 @@ tr.late-row td{background:rgba(245,158,11,.03);}
 .setting-sub{font-size:11px;color:var(--text3);margin-top:2px;}
 .small-btn{padding:7px 14px;border-radius:9px;border:1.5px solid var(--border);background:var(--white);font-size:12px;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;color:var(--text2);transition:all .2s;}
 .small-btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;}
+.sms-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);}
+.sms-row:last-child{border-bottom:none;}
+.sms-name{font-size:13px;font-weight:600;}
+.toggle{position:relative;width:48px;height:26px;border-radius:20px;background:var(--border);cursor:pointer;transition:background .2s;flex:0 0 auto;}
+.toggle.on{background:var(--green);}
+.toggle-knob{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2);}
+.toggle.on .toggle-knob{transform:translateX(22px);}
 </style>
 </head>
 <body>
@@ -280,6 +287,11 @@ tr.late-row td{background:rgba(245,158,11,.03);}
         <select class="student-select" id="manualSlot" style="flex:0 0 90px;"><option value="1">1회차</option><option value="2">2회차</option><option value="3">3회차</option></select>
       </div>
       <button class="small-btn primary" onclick="doManualAuth()" style="width:100%;padding:11px;">✅ 수동 인증 처리</button>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <div class="card-title"><div class="cicon ci-green">💬</div> 반별 문자 발송 ON/OFF</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px;">OFF로 하면 해당 반은 새벽 미제출 문자가 발송되지 않습니다.</div>
+      <div id="smsToggleList"><div style="font-size:13px;color:var(--text3);text-align:center;padding:12px;">⏳ 불러오는 중...</div></div>
     </div>
     <div class="card" style="margin-top:16px;">
       <div class="card-title"><div class="cicon ci-orange">⚙️</div> 설정</div>
@@ -697,7 +709,7 @@ function tryTeacher(el){switchPage('teacher',el);}
 
 // ── 비밀번호 ──
 function showPwGate(){document.getElementById('pwGate').style.display='flex';document.getElementById('teacherDash').style.display='none';pwBuffer='';updatePwDots();}
-function showTeacherDash(){document.getElementById('pwGate').style.display='none';document.getElementById('teacherDash').style.display='block';loadSubmissions();renderManualDropdowns();}
+function showTeacherDash(){document.getElementById('pwGate').style.display='none';document.getElementById('teacherDash').style.display='block';loadSubmissions();renderManualDropdowns();renderSmsToggles();}
 function pwInput(d){if(pwBuffer.length>=4)return;pwBuffer+=d;updatePwDots();if(pwBuffer.length===4){if(pwBuffer===TEACHER_PW){teacherUnlocked=true;save('hw_teacher_unlocked',true);showTeacherDash();}else{document.getElementById('pwError').textContent='비밀번호가 틀렸습니다.';setTimeout(function(){pwBuffer='';updatePwDots();document.getElementById('pwError').textContent='';},900);}}}
 function pwDelete(){pwBuffer=pwBuffer.slice(0,-1);updatePwDots();document.getElementById('pwError').textContent='';}
 function pwClear(){pwBuffer='';updatePwDots();document.getElementById('pwError').textContent='';}
@@ -875,6 +887,46 @@ function deleteSub(className,row){
 }
 
 // ── 수동 인증 ──
+// ── 반별 문자발송 토글 ──
+function renderSmsToggles(){
+  var wrap=document.getElementById('smsToggleList');
+  if(!classes.length){wrap.innerHTML='<div style="font-size:13px;color:var(--text3);text-align:center;padding:12px;">반 정보가 없습니다.</div>';return;}
+  wrap.innerHTML=classes.map(function(c){
+    var on=c.smsOn!==false; // 기본 ON
+    return '<div class="sms-row">'
+      +'<div class="sms-name">'+c.name+'</div>'
+      +'<div class="toggle'+(on?' on':'')+'" data-cls="'+c.name.replace(/"/g,'')+'" onclick="toggleSms(this)"><div class="toggle-knob"></div></div>'
+      +'</div>';
+  }).join('');
+}
+
+function toggleSms(el){
+  var className=el.getAttribute('data-cls');
+  var willBeOn=!el.classList.contains('on');
+  // UI 먼저 반영 (반응성)
+  el.classList.toggle('on');
+  // 로컬 상태도 갱신
+  var c=classes.find(function(x){return x.name===className;});
+  if(c)c.smsOn=willBeOn;
+  // 서버 저장
+  if(!scriptUrl)return;
+  fetch(scriptUrl+'?action=setSmsToggle&className='+encodeURIComponent(className)+'&on='+willBeOn,{redirect:'follow'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(!d.success){
+        // 실패 시 UI 롤백
+        el.classList.toggle('on');
+        if(c)c.smsOn=!willBeOn;
+        alert('저장 실패: '+(d.error||'다시 시도해주세요'));
+      }
+    })
+    .catch(function(){
+      el.classList.toggle('on');
+      if(c)c.smsOn=!willBeOn;
+      alert('네트워크 오류로 저장 실패. 다시 시도해주세요.');
+    });
+}
+
 function renderManualDropdowns(){
   var sel=document.getElementById('manualClass');
   sel.innerHTML='<option value="">반 선택</option>';
