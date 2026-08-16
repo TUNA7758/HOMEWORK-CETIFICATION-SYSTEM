@@ -4,6 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>숙제 인증 시스템</title>
+<!-- PWA: 홈 화면 바로가기 -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#3b6ef6">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="숙제인증">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=Gmarket+Sans:wght@300;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#f4f6fb;--white:#fff;--sf2:#f0f3fa;--border:#e2e8f4;--accent:#3b6ef6;--accent2:#7c5cfc;--green:#10b981;--red:#ef4444;--orange:#f59e0b;--text:#1a2035;--text2:#5a6380;--text3:#9aa2bb;--sh:0 2px 16px rgba(59,110,246,.08);}
@@ -607,6 +616,7 @@ async function submitHomework(){
 }
 
 async function doUploadAndSave(record,validImgs,validVids,name,phone,late,timeStr,dlStr,WEEK){
+  _submitDone=false; // 새 제출 시작 → 완료 플래그 리셋
   var url=scriptUrl;
   var photoUrls=[],videoUrls=[];
   // 뽑기를 먼저 뽑아서 시트 기록에 포함 (화면 표시는 finishSubmit에서)
@@ -663,7 +673,10 @@ async function doUploadAndSave(record,validImgs,validVids,name,phone,late,timeSt
   }
 }
 
+var _submitDone=false;
 function finishSubmit(record,photoUrls,videoUrls,late,dlStr){
+  if(_submitDone)return; // 안전장치+정상완료 이중 실행 방지
+  _submitDone=true;
   record.photoUrls=photoUrls;record.videoUrls=videoUrls;
   setProgress('',-1);
   renderWeekSlots();renderSlotBtns();
@@ -970,10 +983,20 @@ function editScriptUrl(){
   if(nu!==null){scriptUrl=nu.trim();save('hw_scriptUrl',scriptUrl);loadSettings();}
 }
 function confirmReset(){
-  showConfirm('새학기 초기화','구글 시트의 반 탭이 숨김 처리됩니다.\n데이터는 보존됩니다.\n\n계속할까요?',function(){
+  var label=prompt('지난 기록을 어떤 학기 이름으로 보관할까요?\n(예: 2025-1학기, 2025-여름방학)','');
+  if(label===null)return; // 취소
+  label=label.trim();
+  if(!label){alert('학기 이름을 입력해주세요.');return;}
+  showConfirm('새학기 초기화','지난 기록이 "('+label+')" 이름으로 보관되고,\n같은 이름의 새 빈 반이 생성됩니다.\n\n학생명단·설정은 유지됩니다.\n\n계속할까요?',function(){
     var url=scriptUrl||load('hw_scriptUrl','');
     if(!url){alert('URL 없음');return;}
-    fetch(url+'?action=resetSemester',{redirect:'follow'}).then(function(r){return r.json();}).then(function(d){alert(d.success?'초기화 완료!':'오류: '+(d.error||''));}).catch(function(){alert('요청 전송됨. 시트에서 확인해주세요.');});
+    fetch(url+'?action=resetSemester&label='+encodeURIComponent(label),{redirect:'follow'})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        alert(d.success?(d.message||'초기화 완료!'):'오류: '+(d.error||''));
+        if(d.success)loadSettings();
+      })
+      .catch(function(){alert('요청 전송됨. 시트에서 확인해주세요.');});
   });
 }
 
