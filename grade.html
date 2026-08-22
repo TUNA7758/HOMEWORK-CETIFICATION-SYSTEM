@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>숙제 채점 시스템</title>
+<link rel="manifest" href="manifest-grade.json">
+<meta name="theme-color" content="#7c5cfc">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="숙제채점">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link href="https://fonts.googleapis.com/css2?family=Gmarket+Sans:wght@300;500;700&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f4f6fb;--white:#fff;--sf2:#f0f3fa;--border:#e2e8f4;--accent:#3b6ef6;--accent2:#7c5cfc;--green:#10b981;--red:#ef4444;--orange:#f59e0b;--text:#1a2035;--text2:#5a6380;--text3:#9aa2bb;--sh:0 2px 16px rgba(59,110,246,.08);}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+.nav{background:var(--white);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 20px;height:56px;position:sticky;top:0;z-index:200;box-shadow:0 2px 12px rgba(59,110,246,.06);}
+.nav-logo{font-family:'Gmarket Sans',sans-serif;font-size:16px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent2));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+.nav-tabs{display:flex;gap:3px;background:var(--sf2);border-radius:12px;padding:4px;}
+.nav-tab{padding:6px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:none;background:transparent;color:var(--text2);font-family:'Noto Sans KR',sans-serif;}
+.nav-tab.active{background:var(--white);color:var(--accent);box-shadow:0 2px 8px rgba(59,110,246,.12);}
+.page{display:none;padding:20px;max-width:640px;margin:0 auto;}
+.page.active{display:block;}
+.card{background:var(--white);border:1px solid var(--border);border-radius:18px;padding:20px;box-shadow:var(--sh);margin-bottom:16px;}
+.card-title{font-family:'Gmarket Sans',sans-serif;font-size:14px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.cicon{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;}
+.ci-blue{background:rgba(59,110,246,.1);}.ci-purple{background:rgba(124,92,252,.1);}.ci-green{background:rgba(16,185,129,.1);}.ci-orange{background:rgba(245,158,11,.1);}
+.inp{width:100%;background:var(--sf2);border:1.5px solid var(--border);border-radius:11px;padding:11px 14px;font-size:14px;font-family:'Noto Sans KR',sans-serif;color:var(--text);outline:none;}
+.inp:focus{border-color:var(--accent);}
+.row2{display:flex;gap:10px;margin-bottom:12px;}
+.row2 .inp{flex:1;}
+.class-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;}
+.class-btn{padding:12px 8px;border-radius:12px;border:2px solid var(--border);background:var(--sf2);font-size:12px;font-weight:600;font-family:'Noto Sans KR',sans-serif;cursor:pointer;text-align:center;color:var(--text2);line-height:1.4;}
+.class-btn.selected{background:rgba(59,110,246,.1);border-color:var(--accent);color:var(--accent);}
+.slot-btns{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;}
+.slot-btn{padding:14px 8px;border-radius:12px;border:2px solid var(--border);background:var(--sf2);font-size:13px;font-weight:700;font-family:'Noto Sans KR',sans-serif;cursor:pointer;text-align:center;color:var(--text2);}
+.slot-btn.selected{background:rgba(59,110,246,.1);border-color:var(--accent);color:var(--accent);}
+.slot-btn.done{background:rgba(16,185,129,.07);border-color:var(--green);color:var(--green);}
+.hero{background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:18px;padding:22px;color:#fff;margin-bottom:16px;position:relative;overflow:hidden;}
+.hero::after{content:'📝';position:absolute;right:20px;top:50%;transform:translateY(-50%);font-size:50px;opacity:.15;}
+.hero h2{font-family:'Gmarket Sans',sans-serif;font-size:18px;margin-bottom:4px;}
+.hero p{font-size:12px;opacity:.85;}
+.hero-badge{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.3);border-radius:20px;padding:3px 12px;font-size:11px;font-weight:600;margin-top:10px;}
+/* OMR */
+.omr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;}
+.omr-q{background:var(--sf2);border:1.5px solid var(--border);border-radius:12px;padding:8px 10px;display:flex;align-items:center;gap:8px;}
+.omr-num{font-size:12px;font-weight:700;color:var(--text2);width:24px;flex:0 0 auto;text-align:center;}
+.omr-opts{display:flex;gap:4px;flex:1;}
+.omr-opt{flex:1;height:30px;border-radius:8px;border:1.5px solid var(--border);background:var(--white);font-size:13px;font-weight:700;cursor:pointer;color:var(--text3);display:flex;align-items:center;justify-content:center;transition:all .12s;}
+.omr-opt.sel{background:var(--accent);border-color:var(--accent);color:#fff;}
+.omr-q.answered{border-color:var(--accent);}
+.btn-submit{width:100%;padding:16px;border-radius:14px;border:none;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-size:16px;font-weight:700;font-family:'Gmarket Sans',sans-serif;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;}
+.btn-submit:disabled{opacity:.5;cursor:not-allowed;}
+.spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;display:inline-block;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+/* 채점 결과 */
+.score-card{display:none;border-radius:18px;padding:24px;margin-bottom:16px;text-align:center;}
+.score-card.show{display:block;}
+.score-big{font-family:'Gmarket Sans',sans-serif;font-size:40px;font-weight:700;margin:8px 0;}
+.score-sub{font-size:14px;color:var(--text2);}
+.grade-bar{height:10px;background:var(--sf2);border-radius:10px;overflow:hidden;margin:14px 0;}
+.grade-fill{height:100%;border-radius:10px;transition:width .8s;}
+.result-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));gap:5px;margin-top:14px;}
+.rq{aspect-ratio:1;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-direction:column;line-height:1.1;}
+.rq.ok{background:rgba(16,185,129,.15);color:var(--green);}
+.rq.no{background:rgba(239,68,68,.15);color:var(--red);}
+.rq small{font-size:8px;opacity:.7;}
+.action-btn{width:100%;padding:14px;border-radius:12px;border:none;font-size:15px;font-weight:700;font-family:'Noto Sans KR',sans-serif;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:8px;}
+.action-pdf{background:var(--green);color:#fff;}
+.action-locked{background:var(--sf2);color:var(--text3);cursor:not-allowed;}
+.action-draw{background:linear-gradient(135deg,var(--orange),#ff8a3d);color:#fff;}
+/* 오답노트 업로드 */
+.drop-zone{border:2px dashed var(--border);border-radius:14px;padding:20px;text-align:center;cursor:pointer;background:var(--sf2);position:relative;overflow:hidden;}
+.drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+.drop-icon{font-size:28px;display:block;margin-bottom:6px;}
+.preview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:6px;margin-top:10px;}
+.progress-wrap{margin:10px 0;display:none;}
+.progress-top{display:flex;justify-content:space-between;font-size:12px;color:var(--text2);margin-bottom:4px;}
+.progress-bar-bg{height:6px;background:var(--sf2);border-radius:10px;overflow:hidden;}
+.progress-bar{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:10px;width:0%;transition:width .3s;}
+/* 뽑기 */
+.draw-overlay{display:none;position:fixed;inset:0;background:rgba(10,15,40,.92);z-index:400;align-items:center;justify-content:center;flex-direction:column;}
+.draw-overlay.show{display:flex;}
+.draw-title{font-family:'Gmarket Sans',sans-serif;font-size:22px;color:#fff;margin-bottom:8px;text-align:center;}
+.draw-sub{font-size:14px;color:rgba(255,255,255,.7);margin-bottom:30px;text-align:center;}
+.box-scene{position:relative;width:180px;height:180px;cursor:pointer;}
+.box-body{width:160px;height:120px;background:linear-gradient(135deg,#3b6ef6,#7c5cfc);border-radius:12px 12px 18px 18px;position:absolute;bottom:0;left:10px;display:flex;align-items:center;justify-content:center;font-size:48px;box-shadow:0 8px 32px rgba(59,110,246,.5);}
+.box-lid{width:180px;height:50px;background:linear-gradient(135deg,#5b8ef6,#9c7cfc);border-radius:12px;position:absolute;top:0;left:0;transition:transform .4s ease;transform-origin:bottom center;}
+.box-lid.open{transform:translateY(-40px) rotate(-15deg);}
+@keyframes shake{0%,100%{transform:rotate(0);}20%{transform:rotate(-8deg);}40%{transform:rotate(8deg);}60%{transform:rotate(-5deg);}80%{transform:rotate(5deg);}}
+.draw-result{display:none;text-align:center;margin-top:24px;}
+.draw-result.show{display:block;}
+.draw-result-rank{font-family:'Gmarket Sans',sans-serif;font-size:28px;color:#fff;margin-bottom:4px;}
+.draw-close-btn{padding:12px 32px;border-radius:14px;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:15px;font-weight:700;cursor:pointer;font-family:'Noto Sans KR',sans-serif;}
+/* 교사 */
+.pw-gate{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;}
+.pw-gate-icon{font-size:48px;margin-bottom:16px;}
+.pw-gate-title{font-family:'Gmarket Sans',sans-serif;font-size:20px;font-weight:700;margin-bottom:6px;}
+.pw-gate-sub{font-size:13px;color:var(--text2);margin-bottom:24px;}
+.pw-dots{display:flex;gap:12px;justify-content:center;margin-bottom:20px;}
+.pw-dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--border);background:var(--sf2);}
+.pw-dot.filled{background:var(--accent);border-color:var(--accent);}
+.pw-keypad{display:grid;grid-template-columns:repeat(3,68px);gap:10px;justify-content:center;}
+.pw-key{width:68px;height:68px;border-radius:16px;border:1.5px solid var(--border);background:var(--white);font-size:20px;font-weight:700;font-family:'Gmarket Sans',sans-serif;cursor:pointer;color:var(--text);box-shadow:var(--sh);}
+.pw-error{font-size:13px;color:var(--red);margin-top:12px;height:18px;}
+.stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;}
+.stat-card{background:var(--white);border:1px solid var(--border);border-radius:14px;padding:14px;text-align:center;box-shadow:var(--sh);}
+.stat-label{font-size:11px;color:var(--text3);margin-bottom:4px;}
+.stat-val{font-size:22px;font-weight:700;font-family:'Gmarket Sans',sans-serif;}
+.cf-btns{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;}
+.cf-btn{padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:var(--white);color:var(--text2);font-family:'Noto Sans KR',sans-serif;}
+.cf-btn.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.tbl-wrap{overflow-x:auto;border-radius:12px;border:1px solid var(--border);}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{background:var(--sf2);padding:10px 12px;text-align:left;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);white-space:nowrap;}
+td{padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap;}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;}
+.bg-green{background:rgba(16,185,129,.12);color:var(--green);}
+.bg-orange{background:rgba(245,158,11,.12);color:var(--orange);}
+.bg-red{background:rgba(239,68,68,.12);color:var(--red);}
+.bg-blue{background:rgba(59,110,246,.12);color:var(--accent);}
+.icon-btn{width:30px;height:30px;border-radius:8px;border:1.5px solid var(--border);background:var(--white);cursor:pointer;font-size:14px;}
+.small-btn{padding:7px 14px;border-radius:9px;border:1.5px solid var(--border);background:var(--white);font-size:12px;font-weight:600;cursor:pointer;font-family:'Noto Sans KR',sans-serif;color:var(--text2);}
+.result-card2{display:none;border-radius:16px;padding:16px;margin-top:12px;text-align:center;font-size:13px;}
+.result-card2.show{display:block;}
+.rc-fail{background:rgba(239,68,68,.08);border:1.5px solid rgba(239,68,68,.2);color:var(--red);}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:500;align-items:center;justify-content:center;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:var(--white);border-radius:20px;padding:20px;max-width:500px;width:95%;max-height:90vh;overflow-y:auto;}
+.modal-box img{max-width:100%;border-radius:12px;}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <div class="nav-logo">📝 숙제 채점</div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" onclick="switchPage('student',this)">🎓 학생</button>
+    <button class="nav-tab" onclick="switchPage('teacher',this)">👩‍🏫 교사 🔒</button>
+  </div>
+</nav>
+
+<!-- 학생 페이지 -->
+<div class="page active" id="page-student">
+  <div class="hero">
+    <h2>숙제 채점 시스템</h2>
+    <p>답을 입력하면 바로 채점됩니다!</p>
+    <div class="hero-badge" id="heroBadge">📚 반을 선택해주세요</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="cicon ci-blue">🏫</div> 반 선택</div>
+    <div class="class-grid" id="classGrid"><div style="grid-column:1/-1;text-align:center;color:var(--text3);font-size:13px;padding:16px;">⏳ 불러오는 중...</div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="cicon ci-purple">✏️</div> 학생 정보</div>
+    <div class="row2">
+      <input class="inp" id="stuName" placeholder="이름" oninput="onInput()">
+      <input class="inp" id="stuPhone" placeholder="번호 뒷 4자리" maxlength="4" inputmode="numeric" oninput="onInput()">
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><div class="cicon ci-orange">🎯</div> 회차 선택</div>
+    <div class="slot-btns" id="slotBtns" style="grid-template-columns:repeat(3,1fr);">
+      <button class="slot-btn" onclick="selectSlot(1)">1회차</button>
+      <button class="slot-btn" onclick="selectSlot(2)">2회차</button>
+      <button class="slot-btn" onclick="selectSlot(3)">3회차</button>
+    </div>
+    <div id="slotInfo" style="font-size:12px;color:var(--text3);margin-top:8px;"></div>
+  </div>
+
+  <div class="card" id="omrCard" style="display:none;">
+    <div class="card-title"><div class="cicon ci-green">📋</div> 답안 입력 <span id="omrProgress" style="font-size:11px;color:var(--text3);font-weight:400;margin-left:auto;"></span></div>
+    <div class="omr-grid" id="omrGrid"></div>
+  </div>
+
+  <button class="btn-submit" id="btnSubmit" disabled onclick="submitAnswers()" style="display:none;">
+    <span id="btnTxt">✅ 제출하고 채점하기</span>
+  </button>
+
+  <div class="result-card2" id="failCard"></div>
+
+  <!-- 채점 결과 -->
+  <div class="score-card" id="scoreCard">
+    <div style="font-size:13px;color:var(--text2);">채점 결과</div>
+    <div class="score-big" id="scoreBig">0 / 0</div>
+    <div class="score-sub" id="scoreSub"></div>
+    <div class="grade-bar"><div class="grade-fill" id="gradeFill" style="width:0%;background:var(--green);"></div></div>
+    <div class="result-grid" id="resultGrid"></div>
+  </div>
+
+  <!-- 제출 후 액션 -->
+  <div class="card" id="afterCard" style="display:none;">
+    <div class="card-title"><div class="cicon ci-green">📖</div> 다음 단계</div>
+    <button class="action-btn action-pdf" id="pdfBtn" onclick="downloadPdf()">📥 해설지 다운로드</button>
+    <div id="wrongSection">
+      <div style="font-size:13px;color:var(--text2);margin:14px 0 8px;">✍️ 틀린 문제를 고쳐서 오답노트를 올리면 뽑기에 참여할 수 있어요!</div>
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" accept="image/*" multiple onchange="handleFiles(this.files)">
+        <span class="drop-icon">📷</span>
+        <div style="font-size:13px;font-weight:600;color:var(--text2);" id="dropText">오답노트 사진 올리기</div>
+        <div style="font-size:11px;color:var(--text3);">여러 장 가능</div>
+        <div class="preview-grid" id="previewGrid"></div>
+      </div>
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-top"><span id="progressLabel">업로드 중...</span><span id="progressPct">0%</span></div>
+        <div class="progress-bar-bg"><div class="progress-bar" id="progressBar"></div></div>
+      </div>
+      <button class="action-btn action-locked" id="drawBtn" onclick="tryDraw()" style="margin-top:10px;">🔒 오답노트 올리면 뽑기 가능</button>
+    </div>
+  </div>
+</div>
+
+<!-- 교사 페이지 -->
+<div class="page" id="page-teacher">
+  <div class="pw-gate" id="pwGate">
+    <div class="pw-gate-icon">🔒</div>
+    <div class="pw-gate-title">교사 인증</div>
+    <div class="pw-gate-sub">4자리 비밀번호</div>
+    <div class="pw-dots"><div class="pw-dot" id="pd0"></div><div class="pw-dot" id="pd1"></div><div class="pw-dot" id="pd2"></div><div class="pw-dot" id="pd3"></div></div>
+    <div class="pw-keypad">
+      <button class="pw-key" onclick="pwIn('1')">1</button><button class="pw-key" onclick="pwIn('2')">2</button><button class="pw-key" onclick="pwIn('3')">3</button>
+      <button class="pw-key" onclick="pwIn('4')">4</button><button class="pw-key" onclick="pwIn('5')">5</button><button class="pw-key" onclick="pwIn('6')">6</button>
+      <button class="pw-key" onclick="pwIn('7')">7</button><button class="pw-key" onclick="pwIn('8')">8</button><button class="pw-key" onclick="pwIn('9')">9</button>
+      <button class="pw-key" onclick="pwDel()">⌫</button><button class="pw-key" onclick="pwIn('0')">0</button><button class="pw-key" onclick="pwClr()">✕</button>
+    </div>
+    <div class="pw-error" id="pwError"></div>
+  </div>
+  <div id="teacherDash" style="display:none;">
+    <div class="stats-grid">
+      <div class="stat-card"><div class="stat-label">제출</div><div class="stat-val" style="color:var(--accent)" id="stCount">0</div></div>
+      <div class="stat-card"><div class="stat-label">평균점수</div><div class="stat-val" style="color:var(--green)" id="stAvg">0</div></div>
+      <div class="stat-card"><div class="stat-label">오답노트 미제출</div><div class="stat-val" style="color:var(--orange)" id="stNoNote">0</div></div>
+    </div>
+    <div class="cf-btns" id="cfBtns"></div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:10px;gap:8px;">
+      <button class="small-btn" onclick="loadRecords()">🔄 새로고침</button>
+      <button class="small-btn" onclick="exportCSV()">📥 CSV</button>
+    </div>
+    <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>반</th><th>이름</th><th>회차</th><th>점수</th><th>정답</th><th>오답노트</th><th>제출시각</th><th>삭제</th></tr></thead>
+        <tbody id="tbody"><tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3);">⏳</td></tr></tbody>
+      </table>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <div class="card-title"><div class="cicon ci-orange">🏆</div> 누적 점수 (한 달)</div>
+      <div class="tbl-wrap">
+        <table><thead><tr><th>반</th><th>이름</th><th>누적점수</th><th>제출횟수</th></tr></thead><tbody id="rankBody"></tbody></table>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px;">
+      <div class="card-title"><div class="cicon ci-purple">🔒</div> 관리</div>
+      <button class="small-btn" onclick="lockT()" style="width:100%;">🔒 교사 잠금</button>
+    </div>
+  </div>
+</div>
+
+<!-- 사진 모달 -->
+<div class="modal-overlay" id="photoModal" onclick="this.classList.remove('show')">
+  <div class="modal-box" onclick="event.stopPropagation()"><img id="modalImg" src=""></div>
+</div>
+
+<!-- 뽑기 -->
+<div class="draw-overlay" id="drawOverlay">
+  <div class="draw-title">🎁 뽑기 시간!</div>
+  <div class="draw-sub" id="drawSub">상자를 클릭!</div>
+  <div class="box-scene" id="boxScene" onclick="boxClick()">
+    <div class="box-lid" id="boxLid"></div>
+    <div class="box-body">🎁</div>
+  </div>
+  <div class="draw-result" id="drawResult">
+    <div class="draw-result-rank" id="drawRank"></div>
+    <button class="draw-close-btn" onclick="closeDraw()">확인</button>
+  </div>
+</div>
+
+<script>
+// ── 설정 ──
+var SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz54tCF1MGM4GHZD79kuTN8-_GsHd07TApj1foI3BNmMZA8G8pSuyWLpN5zT95Lfc_N/exec';
+var TEACHER_PW = '8462';
+var SB_URL     = 'https://vvbanjdioahaaqamibbh.supabase.co';
+var SB_KEY     = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ2YmFuamRpb2FoYWFxYW1pYmJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzAzOTYsImV4cCI6MjA5MTQwNjM5Nn0.gKFDN93mmaKhVH-Quw69bZl9AYaVp_b4aJ02oT9C-Bc';
+var SB_BUCKET  = 'explanations';
+
+var PRIZES = [
+  {rank:'1등 🥇',prob:5},{rank:'2등 🥈',prob:10},{rank:'3등 🥉',prob:15},
+  {rank:'4등 🎁',prob:20},{rank:'5등 🎀',prob:20},{rank:'꽝 😅',prob:30}
+];
+
+function load(k,d){try{var v=localStorage.getItem(k);return v!=null?JSON.parse(v):d;}catch(e){return d;}}
+function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
+
+// ── 상태 ──
+var config={submitBase:10,perCorrect:1,wrongBonus:5,chasi:1};
+var answerKeys={}, classes=[], students=[], records=[];
+var selClass=null, selSlot=null, answers=[], numQ=0;
+var lastResult=null, uploadedImgs=[], drawUnlocked=false, drawWinner=null, boxState='idle';
+var pwBuf='', teacherUnlocked=load('grade_teacher',false);
+var currentCF='all';
+
+window.addEventListener('load',function(){
+  loadConfig();
+  if(teacherUnlocked) showDash();
+});
+
+function loadConfig(){
+  fetch(SCRIPT_URL+'?action=getConfig',{redirect:'follow'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.success){
+        config=d.config||config;
+        answerKeys=d.answers||{};
+        classes=d.classes||[];
+        students=d.students||[];
+      }
+      renderClasses();
+    })
+    .catch(function(){renderClasses();});
+}
+
+function renderClasses(){
+  var g=document.getElementById('classGrid');
+  if(!classes.length){g.innerHTML='<div style="grid-column:1/-1;text-align:center;color:var(--text3);font-size:13px;padding:16px;">반 정보가 없습니다.<br>정답 탭에 반과 정답을 먼저 입력해주세요.</div>';return;}
+  g.innerHTML=classes.map(function(c){return '<button class="class-btn" data-c="'+c+'" onclick="selClassFn(\''+c.replace(/'/g,"\\'")+'\')">'+c.replace(/\//g,'<br>')+'</button>';}).join('');
+}
+
+function selClassFn(c){
+  selClass=c;
+  document.querySelectorAll('.class-btn').forEach(function(b){b.classList.remove('selected');});
+  var btn=document.querySelector('.class-btn[data-c="'+c+'"]');
+  if(btn)btn.classList.add('selected');
+  document.getElementById('heroBadge').textContent='📚 '+c.split('/').pop();
+  renderSlots(); resetOmr();
+}
+
+function renderSlots(){
+  for(var i=1;i<=3;i++){
+    var btn=document.querySelector('#slotBtns button:nth-child('+i+')');
+    var key=selClass+'|'+i;
+    var has=answerKeys[key];
+    btn.className='slot-btn'+(selSlot===i?' selected':'');
+    btn.disabled=!has;
+    btn.style.opacity=has?'1':'0.4';
+  }
+}
+
+function selectSlot(slot){
+  var key=selClass+'|'+slot;
+  if(!answerKeys[key]){alert('아직 '+slot+'회차 정답이 등록되지 않았어요.');return;}
+  selSlot=slot;
+  numQ=answerKeys[key].count;
+  renderSlots();
+  buildOmr();
+  document.getElementById('slotInfo').textContent=slot+'회차 · 총 '+numQ+'문제';
+}
+
+function buildOmr(){
+  answers=new Array(numQ).fill(0);
+  var grid=document.getElementById('omrGrid');
+  var html='';
+  for(var q=0;q<numQ;q++){
+    html+='<div class="omr-q" id="omrq'+q+'"><div class="omr-num">'+(q+1)+'</div><div class="omr-opts">';
+    for(var o=1;o<=5;o++){
+      html+='<div class="omr-opt" onclick="pickAns('+q+','+o+')" data-q="'+q+'" data-o="'+o+'">'+o+'</div>';
+    }
+    html+='</div></div>';
+  }
+  grid.innerHTML=html;
+  document.getElementById('omrCard').style.display='block';
+  document.getElementById('btnSubmit').style.display='flex';
+  updateOmrProgress();
+  checkReady();
+}
+
+function pickAns(q,o){
+  answers[q]=o;
+  var qEl=document.getElementById('omrq'+q);
+  qEl.querySelectorAll('.omr-opt').forEach(function(el){el.classList.toggle('sel', Number(el.getAttribute('data-o'))===o);});
+  qEl.classList.add('answered');
+  updateOmrProgress();
+  checkReady();
+}
+
+function updateOmrProgress(){
+  var done=answers.filter(function(x){return x>0;}).length;
+  document.getElementById('omrProgress').textContent=done+' / '+numQ;
+}
+
+function onInput(){checkReady();}
+
+function checkReady(){
+  var name=document.getElementById('stuName').value.trim();
+  var phone=document.getElementById('stuPhone').value.trim();
+  var allAns=answers.length>0 && answers.every(function(x){return x>0;});
+  document.getElementById('btnSubmit').disabled=!(selClass&&name&&phone.length===4&&selSlot&&allAns);
+}
+
+function resetOmr(){
+  selSlot=null;answers=[];numQ=0;
+  document.getElementById('omrCard').style.display='none';
+  document.getElementById('btnSubmit').style.display='none';
+  document.getElementById('scoreCard').classList.remove('show');
+  document.getElementById('afterCard').style.display='none';
+  document.getElementById('slotInfo').textContent='';
+}
+
+// ── 제출 & 채점 ──
+async function submitAnswers(){
+  var name=document.getElementById('stuName').value.trim();
+  var phone=document.getElementById('stuPhone').value.trim();
+  var key=selClass+'|'+selSlot;
+  var ak=answerKeys[key];
+  if(!ak){alert('정답 정보가 없습니다.');return;}
+
+  document.getElementById('btnSubmit').disabled=true;
+  document.getElementById('btnTxt').innerHTML='<span class="spinner"></span> 채점 중...';
+  document.getElementById('failCard').classList.remove('show');
+
+  // 채점
+  var correctArr=ak.answers.map(function(x){return parseInt(x);});
+  var correct=0, results=[];
+  for(var i=0;i<numQ;i++){
+    var ok=answers[i]===correctArr[i];
+    if(ok)correct++;
+    results.push({q:i+1,my:answers[i],ans:correctArr[i],ok:ok});
+  }
+  var score=config.submitBase + correct*config.perCorrect;
+  lastResult={className:selClass,name:name,phone:phone,slot:selSlot,correct:correct,total:numQ,score:score,results:results,pdf:ak.pdf,answers:answers.slice()};
+
+  // 서버 저장
+  try{
+    var resp=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({
+      type:'grade',className:selClass,name:name,phone:phone,slot:String(selSlot),
+      correct:correct,total:numQ,score:score,studentAnswers:answers
+    })});
+    var rd=await resp.json();
+    if(!rd.success && rd.duplicate){
+      document.getElementById('failCard').className='result-card2 rc-fail show';
+      document.getElementById('failCard').textContent='❌ 이미 제출한 회차입니다. 재제출은 불가능해요.';
+      document.getElementById('btnSubmit').disabled=false;
+      document.getElementById('btnTxt').innerHTML='✅ 제출하고 채점하기';
+      return;
+    }
+  }catch(e){console.warn('저장 실패(채점은 표시)',e);}
+
+  showScore(correct,numQ,score,results);
+  document.getElementById('btnTxt').innerHTML='✅ 제출 완료';
+}
+
+function showScore(correct,total,score,results){
+  document.getElementById('omrCard').style.display='none';
+  document.getElementById('btnSubmit').style.display='none';
+  var pct=Math.round(correct/total*100);
+  var sc=document.getElementById('scoreCard');
+  var color = pct>=80?'var(--green)':(pct>=50?'var(--orange)':'var(--red)');
+  sc.style.background = pct>=80?'rgba(16,185,129,.08)':(pct>=50?'rgba(245,158,11,.08)':'rgba(239,68,68,.08)');
+  sc.style.border='1.5px solid '+color;
+  document.getElementById('scoreBig').textContent=correct+' / '+total;
+  document.getElementById('scoreBig').style.color=color;
+  document.getElementById('scoreSub').textContent='정답률 '+pct+'% · 획득 점수 '+score+'점';
+  document.getElementById('gradeFill').style.width=pct+'%';
+  document.getElementById('gradeFill').style.background=color;
+  document.getElementById('resultGrid').innerHTML=results.map(function(r){
+    return '<div class="rq '+(r.ok?'ok':'no')+'">'+r.q+'<small>'+(r.ok?'○':'답'+r.ans)+'</small></div>';
+  }).join('');
+  sc.classList.add('show');
+  document.getElementById('afterCard').style.display='block';
+
+  // 만점이면 오답노트 스킵, 바로 뽑기 해제
+  if(correct===total){
+    document.getElementById('wrongSection').innerHTML='<div style="font-size:14px;color:var(--green);font-weight:700;text-align:center;margin:14px 0;">🎉 만점! 오답노트 없이 바로 뽑기 가능!</div><button class="action-btn action-draw" onclick="tryDraw()">🎁 뽑기 하러가기</button>';
+    drawUnlocked=true;
+  }
+  sc.scrollIntoView({behavior:'smooth'});
+}
+
+function downloadPdf(){
+  if(lastResult&&lastResult.pdf){window.open(lastResult.pdf,'_blank');}
+  else{alert('해설지가 등록되지 않았습니다. 선생님께 문의하세요.');}
+}
+
+// ── 오답노트 업로드 ──
+function handleFiles(files){
+  var arr=Array.from(files).filter(function(f){return f.type.startsWith('image/');}).slice(0,10);
+  uploadedImgs=[];
+  var grid=document.getElementById('previewGrid');
+  grid.innerHTML='';
+  var loaded=0;
+  if(!arr.length)return;
+  document.getElementById('dropText').textContent=arr.length+'장 선택됨';
+  arr.forEach(function(file,i){
+    var reader=new FileReader();
+    reader.onload=function(e){
+      compress(e.target.result,function(c){
+        uploadedImgs[i]={data:c};
+        loaded++;
+        var img=document.createElement('img');
+        img.src=c;img.style.cssText='width:100%;height:60px;object-fit:cover;border-radius:8px;';
+        grid.appendChild(img);
+        if(loaded===arr.length) autoUploadNotes();
+      });
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function compress(dataUrl,cb){
+  var img=new Image();
+  img.onload=function(){
+    var mw=1200,w=img.width,h=img.height;
+    if(w>mw){h=Math.round(h*mw/w);w=mw;}
+    var cv=document.createElement('canvas');cv.width=w;cv.height=h;
+    cv.getContext('2d').drawImage(img,0,0,w,h);
+    cb(cv.toDataURL('image/jpeg',0.8));
+  };
+  img.src=dataUrl;
+}
+
+async function autoUploadNotes(){
+  var valid=uploadedImgs.filter(function(x){return x;});
+  if(!valid.length)return;
+  setProg('오답노트 업로드 중...',10);
+  var urls=[];
+  var safeClass=lastResult.className.replace(/[^a-zA-Z0-9]/g,'_');
+  var safeName=lastResult.name.replace(/[^a-zA-Z0-9가-힣]/g,'_')||'s';
+  var prefix='wrongnotes/'+safeClass+'/'+config.chasi+'_'+lastResult.slot+'/'+safeName+'_'+Date.now()+'_';
+  for(var i=0;i<valid.length;i++){
+    setProg('업로드 '+(i+1)+'/'+valid.length,Math.round(10+(i+1)/valid.length*80));
+    try{
+      var b64=valid[i].data.split(',')[1];
+      var blob=b64toBlob(b64,'image/jpeg');
+      var url=await uploadSB(blob,prefix+(i+1)+'.jpg');
+      urls.push(url);
+    }catch(e){console.warn('업로드실패',e);}
+  }
+  // 서버에 오답노트 기록
+  try{
+    await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({
+      type:'wrongNote',className:lastResult.className,name:lastResult.name,phone:lastResult.phone,slot:String(lastResult.slot),photoUrls:urls
+    })});
+  }catch(e){}
+  setProg('완료!',100);
+  setTimeout(function(){setProg('',-1);},800);
+  // 뽑기 해제
+  drawUnlocked=true;
+  var db=document.getElementById('drawBtn');
+  db.className='action-btn action-draw';
+  db.innerHTML='🎁 뽑기 하러가기!';
+}
+
+async function uploadSB(blob,path){
+  var r=await fetch(SB_URL+'/storage/v1/object/'+SB_BUCKET+'/'+path,{method:'POST',headers:{'Authorization':'Bearer '+SB_KEY,'Content-Type':'image/jpeg','x-upsert':'true'},body:blob});
+  if(!r.ok){var e=await r.text();throw new Error(e);}
+  return SB_URL+'/storage/v1/object/public/'+SB_BUCKET+'/'+path;
+}
+function b64toBlob(b64,mime){var s=atob(b64),ab=new ArrayBuffer(s.length),ia=new Uint8Array(ab);for(var i=0;i<s.length;i++)ia[i]=s.charCodeAt(i);return new Blob([ab],{type:mime});}
+function setProg(l,p){var w=document.getElementById('progressWrap');if(p<0){w.style.display='none';return;}w.style.display='block';document.getElementById('progressLabel').textContent=l;document.getElementById('progressPct').textContent=p+'%';document.getElementById('progressBar').style.width=p+'%';}
+
+// ── 뽑기 ──
+function tryDraw(){
+  if(!drawUnlocked){alert('오답노트를 먼저 올려주세요!');return;}
+  drawWinner=pickWinner();boxState='idle';
+  document.getElementById('boxLid').classList.remove('open');
+  document.getElementById('drawResult').classList.remove('show');
+  document.getElementById('drawSub').textContent='상자를 클릭!';
+  document.getElementById('drawOverlay').classList.add('show');
+}
+function pickWinner(){var t=PRIZES.reduce(function(s,p){return s+p.prob;},0),r=Math.random()*t,c=0;for(var i=0;i<PRIZES.length;i++){c+=PRIZES[i].prob;if(r<c)return PRIZES[i];}return PRIZES[PRIZES.length-1];}
+function boxClick(){
+  if(boxState==='idle'){boxState='shaking';var s=document.getElementById('boxScene');s.style.animation='none';requestAnimationFrame(function(){s.style.animation='shake .55s ease';});document.getElementById('drawSub').textContent='흔들흔들...';setTimeout(function(){boxState='ready';document.getElementById('drawSub').textContent='한 번 더!';},600);}
+  else if(boxState==='ready'){boxState='open';document.getElementById('boxLid').classList.add('open');document.getElementById('drawSub').textContent='두근두근...';setTimeout(function(){document.getElementById('drawRank').textContent=drawWinner.rank;document.getElementById('drawResult').classList.add('show');},800);}
+}
+function closeDraw(){document.getElementById('drawOverlay').classList.remove('show');}
+
+// ── 페이지 전환 ──
+function switchPage(p,el){
+  document.querySelectorAll('.page').forEach(function(x){x.classList.remove('active');});
+  document.querySelectorAll('.nav-tab').forEach(function(x){x.classList.remove('active');});
+  document.getElementById('page-'+p).classList.add('active');
+  if(el)el.classList.add('active');
+  if(p==='teacher'){teacherUnlocked?showDash():showGate();}
+}
+function showGate(){document.getElementById('pwGate').style.display='flex';document.getElementById('teacherDash').style.display='none';pwBuf='';updDots();}
+function showDash(){document.getElementById('pwGate').style.display='none';document.getElementById('teacherDash').style.display='block';loadRecords();}
+function pwIn(d){if(pwBuf.length>=4)return;pwBuf+=d;updDots();if(pwBuf.length===4){if(pwBuf===TEACHER_PW){teacherUnlocked=true;save('grade_teacher',true);showDash();}else{document.getElementById('pwError').textContent='틀렸습니다';setTimeout(function(){pwBuf='';updDots();document.getElementById('pwError').textContent='';},800);}}}
+function pwDel(){pwBuf=pwBuf.slice(0,-1);updDots();}
+function pwClr(){pwBuf='';updDots();}
+function updDots(){for(var i=0;i<4;i++)document.getElementById('pd'+i).className='pw-dot'+(i<pwBuf.length?' filled':'');}
+function lockT(){teacherUnlocked=false;save('grade_teacher',false);showGate();}
+
+// ── 교사: 기록 ──
+function loadRecords(){
+  document.getElementById('tbody').innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3);">⏳</td></tr>';
+  fetch(SCRIPT_URL+'?action=getRecords',{redirect:'follow'})
+    .then(function(r){return r.json();})
+    .then(function(d){records=(d.success&&d.records)?d.records:[];renderDash();})
+    .catch(function(){records=[];renderDash();});
+}
+
+function getFiltered(){return currentCF==='all'?records:records.filter(function(r){return r.className===currentCF;});}
+
+function renderDash(){
+  // 반 필터
+  var names=[];records.forEach(function(r){if(names.indexOf(r.className)===-1)names.push(r.className);});
+  var cf=document.getElementById('cfBtns');
+  cf.innerHTML='<button class="cf-btn'+(currentCF==='all'?' active':'')+'" onclick="setCF(\'all\',this)">전체</button>'+names.map(function(n){return '<button class="cf-btn'+(currentCF===n?' active':'')+'" onclick="setCF(\''+n.replace(/'/g,"\\'")+'\',this)">'+n.split('/').pop()+'</button>';}).join('');
+
+  var f=getFiltered();
+  document.getElementById('stCount').textContent=f.length;
+  var avg=f.length?Math.round(f.reduce(function(s,r){return s+r.score;},0)/f.length):0;
+  document.getElementById('stAvg').textContent=avg;
+  document.getElementById('stNoNote').textContent=f.filter(function(r){return r.noteStatus==='미제출';}).length;
+
+  var tb=document.getElementById('tbody');
+  if(!f.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3);">기록 없음</td></tr>';}
+  else{
+    tb.innerHTML=f.map(function(r){
+      var noteBadge=r.noteStatus==='만점'?'<span class="badge bg-green">만점</span>':(r.noteStatus==='제출'?(r.noteUrls.length?'<button class="icon-btn" onclick="viewNote(\''+r.noteUrls[0]+'\')">📷</button>':'<span class="badge bg-blue">제출</span>'):'<span class="badge bg-orange">미제출</span>');
+      return '<tr><td>'+r.className.split('/').pop()+'</td><td><strong>'+r.name+'</strong></td><td>'+r.slot+'회</td><td><strong>'+r.score+'</strong></td><td>'+r.correct+'/'+r.total+'</td><td>'+noteBadge+'</td><td style="font-size:11px;color:var(--text3)">'+r.time+'</td><td><button class="icon-btn" onclick="delRec('+r.row+')">🗑</button></td></tr>';
+    }).join('');
+  }
+  renderRank(f);
+}
+
+function renderRank(f){
+  var map={};
+  f.forEach(function(r){var k=r.className+'|'+r.name;if(!map[k])map[k]={className:r.className,name:r.name,total:0,cnt:0};map[k].total+=r.score;map[k].cnt++;});
+  var rows=Object.values(map).sort(function(a,b){return b.total-a.total;});
+  document.getElementById('rankBody').innerHTML=rows.length?rows.map(function(r){return '<tr><td>'+r.className.split('/').pop()+'</td><td><strong>'+r.name+'</strong></td><td><strong style="color:var(--accent)">'+r.total+'점</strong></td><td>'+r.cnt+'회</td></tr>';}).join(''):'<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--text3)">기록 없음</td></tr>';
+}
+
+function setCF(c,el){currentCF=c;document.querySelectorAll('.cf-btn').forEach(function(b){b.classList.remove('active');});el.classList.add('active');renderDash();}
+function viewNote(url){document.getElementById('modalImg').src=url;document.getElementById('photoModal').classList.add('show');}
+function delRec(row){if(!confirm('이 기록을 삭제할까요?'))return;fetch(SCRIPT_URL+'?action=deleteRecord&row='+row,{redirect:'follow'}).then(function(r){return r.json();}).then(function(d){if(d.success)loadRecords();}).catch(function(){loadRecords();});}
+function exportCSV(){
+  var f=getFiltered();
+  var rows=[['제출시각','반','이름','번호','회차','맞은개수','총문항','점수','오답노트']];
+  f.forEach(function(r){rows.push([r.time,r.className,r.name,r.phone,r.slot,r.correct,r.total,r.score,r.noteStatus]);});
+  var csv=rows.map(function(r){return r.map(function(c){return '"'+(c||'').toString().replace(/"/g,'""')+'"';}).join(',');}).join('\n');
+  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv'}));a.download='채점기록.csv';a.click();
+}
+</script>
+</body>
+</html>
