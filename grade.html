@@ -371,19 +371,32 @@ function selectSlot(slot){
   numQ=answerKeys[key].count;
   renderSlots();
   buildOmr();
-  document.getElementById('slotInfo').textContent=slot+'회차 · 총 '+numQ+'문제';
+  var essayCnt = answerKeys[key].answers.filter(function(x){return String(x).trim().toUpperCase()==='X';}).length;
+  var infoTxt = slot+'회차 · 총 '+numQ+'문제';
+  if(essayCnt>0) infoTxt += ' (객관식 '+(numQ-essayCnt)+' + 서술형 '+essayCnt+')';
+  document.getElementById('slotInfo').textContent=infoTxt;
 }
 
 function buildOmr(){
   answers=new Array(numQ).fill(0);
+  // 서술형(X) 문항 파악
+  var key=selClass+'|'+selSlot;
+  var ak=answerKeys[key];
+  var isEssay = ak && ak.answers ? ak.answers.map(function(x){return String(x).trim().toUpperCase()==='X';}) : [];
   var grid=document.getElementById('omrGrid');
   var html='';
   for(var q=0;q<numQ;q++){
-    html+='<div class="omr-q" id="omrq'+q+'"><div class="omr-num">'+(q+1)+'</div><div class="omr-opts">';
-    for(var o=1;o<=5;o++){
-      html+='<div class="omr-opt" onclick="pickAns('+q+','+o+')" data-q="'+q+'" data-o="'+o+'">'+o+'</div>';
+    if(isEssay[q]){
+      // 서술형: 자동 통과, 클릭 불가
+      answers[q]=1; // 채점에서 제외되므로 값은 아무거나
+      html+='<div class="omr-q answered" id="omrq'+q+'" style="opacity:0.7;background:rgba(245,158,11,.08);border-color:rgba(245,158,11,.4)"><div class="omr-num">'+(q+1)+'</div><div style="flex:1;font-size:12px;color:var(--orange);font-weight:600;text-align:center">✏️ 서술형 (선생님 채점)</div></div>';
+    } else {
+      html+='<div class="omr-q" id="omrq'+q+'"><div class="omr-num">'+(q+1)+'</div><div class="omr-opts">';
+      for(var o=1;o<=5;o++){
+        html+='<div class="omr-opt" onclick="pickAns('+q+','+o+')" data-q="'+q+'" data-o="'+o+'">'+o+'</div>';
+      }
+      html+='</div></div>';
     }
-    html+='</div></div>';
   }
   grid.innerHTML=html;
   document.getElementById('omrCard').style.display='block';
@@ -402,8 +415,19 @@ function pickAns(q,o){
 }
 
 function updateOmrProgress(){
-  var done=answers.filter(function(x){return x>0;}).length;
-  document.getElementById('omrProgress').textContent=done+' / '+numQ;
+  // 서술형(X) 제외한 자동채점 대상만 카운트
+  var key=selClass+'|'+selSlot;
+  var ak=answerKeys[key];
+  var autoCount=0, autoDone=0;
+  if(ak && ak.answers){
+    ak.answers.forEach(function(a,i){
+      if(String(a).trim().toUpperCase()!=='X'){
+        autoCount++;
+        if(answers[i]>0) autoDone++;
+      }
+    });
+  }
+  document.getElementById('omrProgress').textContent=autoDone+' / '+autoCount;
 }
 
 function onInput(){checkReady();}
@@ -436,25 +460,35 @@ async function submitAnswers(){
   document.getElementById('btnTxt').innerHTML='<span class="spinner"></span> 채점 중...';
   document.getElementById('failCard').classList.remove('show');
 
-  // 채점 (복수정답 지원: "3|5" 형태 = 3번 또는 5번 정답)
+  // 채점 (복수정답 지원: "3|5" / 서술형 지원: "X" 는 채점 제외)
   var correctArr=ak.answers.map(function(x){
-    return String(x).split('|').map(function(v){return parseInt(v);}).filter(function(v){return !isNaN(v);});
+    var s = String(x).trim().toUpperCase();
+    if(s==='X') return 'X'; // 서술형 표시
+    return s.split('|').map(function(v){return parseInt(v);}).filter(function(v){return !isNaN(v);});
   });
-  var correct=0, results=[];
+  var correct=0, results=[], autoTotal=0;
   for(var i=0;i<numQ;i++){
+    if(correctArr[i]==='X'){
+      // 서술형: 채점 제외, 자동 통과 표시
+      results.push({q:i+1,my:answers[i],ans:'서술형',ok:'X'});
+      continue;
+    }
+    autoTotal++;
     var validAnswers = correctArr[i] || [];
     var ok = validAnswers.indexOf(answers[i]) !== -1;
     if(ok)correct++;
     results.push({q:i+1,my:answers[i],ans:validAnswers.join('/'),ok:ok});
   }
+  // total은 자동채점 대상 문항 수 (서술형 제외)
+  var total = autoTotal;
   var score=config.submitBase + correct*config.perCorrect;
-  lastResult={className:selClass,name:name,phone:phone,slot:selSlot,correct:correct,total:numQ,score:score,results:results,pdf:ak.pdf,answers:answers.slice()};
+  lastResult={className:selClass,name:name,phone:phone,slot:selSlot,correct:correct,total:total,score:score,results:results,pdf:ak.pdf,answers:answers.slice()};
 
   // 서버 저장
   try{
     var resp=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({
       type:'grade',className:selClass,name:name,phone:phone,slot:String(selSlot),
-      correct:correct,total:numQ,score:score,studentAnswers:answers
+      correct:correct,total:total,score:score,studentAnswers:answers
     })});
     var rd=await resp.json();
     if(!rd.success && rd.duplicate){
@@ -466,7 +500,7 @@ async function submitAnswers(){
     }
   }catch(e){console.warn('저장 실패(채점은 표시)',e);}
 
-  showScore(correct,numQ,score,results);
+  showScore(correct,total,score,results);
   document.getElementById('btnTxt').innerHTML='✅ 제출 완료';
 }
 
@@ -484,6 +518,7 @@ function showScore(correct,total,score,results){
   document.getElementById('gradeFill').style.width=pct+'%';
   document.getElementById('gradeFill').style.background=color;
   document.getElementById('resultGrid').innerHTML=results.map(function(r){
+    if(r.ok==='X') return '<div class="rq" style="background:rgba(245,158,11,.15);color:var(--orange)">'+r.q+'<small>서술</small></div>';
     return '<div class="rq '+(r.ok?'ok':'no')+'">'+r.q+'<small>'+(r.ok?'○':'답'+r.ans)+'</small></div>';
   }).join('');
   sc.classList.add('show');
