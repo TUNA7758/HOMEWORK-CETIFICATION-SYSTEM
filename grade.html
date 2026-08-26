@@ -285,7 +285,9 @@ td{padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap;}
     <div class="box-body">🎁</div>
   </div>
   <div class="draw-result" id="drawResult">
+    <div id="drawEmoji" style="font-size:56px;margin-bottom:8px"></div>
     <div class="draw-result-rank" id="drawRank"></div>
+    <div id="drawPrizeName" style="font-size:14px;color:rgba(255,255,255,.85);margin:6px 20px 20px;line-height:1.5;word-break:keep-all"></div>
     <button class="draw-close-btn" onclick="closeDraw()">확인</button>
   </div>
 </div>
@@ -298,9 +300,14 @@ var SB_URL     = 'https://vvbanjdioahaaqamibbh.supabase.co';
 var SB_KEY     = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ2YmFuamRpb2FoYWFxYW1pYmJoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4MzAzOTYsImV4cCI6MjA5MTQwNjM5Nn0.gKFDN93mmaKhVH-Quw69bZl9AYaVp_b4aJ02oT9C-Bc';
 var SB_BUCKET  = 'explanations';
 
+// 뽑기 상품 (시트 "뽑기설정" 탭에서 로드됨. 시트 비어있으면 기본값 사용)
 var PRIZES = [
-  {rank:'1등 🥇',prob:5},{rank:'2등 🥈',prob:10},{rank:'3등 🥉',prob:15},
-  {rank:'4등 🎁',prob:20},{rank:'5등 🎀',prob:20},{rank:'꽝 😅',prob:30}
+  {rank:'1등',emoji:'🥇',name:'1등',prob:5},
+  {rank:'2등',emoji:'🥈',name:'2등',prob:10},
+  {rank:'3등',emoji:'🥉',name:'3등',prob:15},
+  {rank:'4등',emoji:'🎁',name:'4등',prob:20},
+  {rank:'5등',emoji:'🎀',name:'5등',prob:20},
+  {rank:'꽝',emoji:'😅',name:'꽝',prob:30}
 ];
 
 function load(k,d){try{var v=localStorage.getItem(k);return v!=null?JSON.parse(v):d;}catch(e){return d;}}
@@ -327,6 +334,12 @@ function loadConfig(){
         config=d.config||config;
         answerKeys=d.answers||{};
         deadlines=d.deadlines||{};
+        // 뽑기설정 시트에서 로드 (없으면 기본값 유지)
+        if(d.prizes && d.prizes.length){
+          PRIZES = d.prizes.map(function(p){
+            return {rank:p.rank, emoji:p.emoji||'🎁', name:p.name||p.rank, prob:Number(p.prob)||0};
+          });
+        }
         classes=d.classes||[];
         students=d.students||[];
       }
@@ -650,7 +663,13 @@ function tryDraw(){
 function pickWinner(){var t=PRIZES.reduce(function(s,p){return s+p.prob;},0),r=Math.random()*t,c=0;for(var i=0;i<PRIZES.length;i++){c+=PRIZES[i].prob;if(r<c)return PRIZES[i];}return PRIZES[PRIZES.length-1];}
 function boxClick(){
   if(boxState==='idle'){boxState='shaking';var s=document.getElementById('boxScene');s.style.animation='none';requestAnimationFrame(function(){s.style.animation='shake .55s ease';});document.getElementById('drawSub').textContent='흔들흔들...';setTimeout(function(){boxState='ready';document.getElementById('drawSub').textContent='한 번 더!';},600);}
-  else if(boxState==='ready'){boxState='open';document.getElementById('boxLid').classList.add('open');document.getElementById('drawSub').textContent='두근두근...';setTimeout(function(){document.getElementById('drawRank').textContent=drawWinner.rank;document.getElementById('drawResult').classList.add('show');if(lastResult){try{fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({type:'drawResult',className:lastResult.className,name:lastResult.name,phone:lastResult.phone,slot:String(lastResult.slot),prize:drawWinner.rank})});}catch(e){console.warn('뽑기저장실패',e);}}},800);}
+  else if(boxState==='ready'){boxState='open';document.getElementById('boxLid').classList.add('open');document.getElementById('drawSub').textContent='두근두근...';setTimeout(function(){
+    document.getElementById('drawEmoji').textContent=drawWinner.emoji||'🎁';
+    document.getElementById('drawRank').textContent=drawWinner.rank;
+    document.getElementById('drawPrizeName').textContent=drawWinner.name||'';
+    document.getElementById('drawResult').classList.add('show');
+    if(lastResult){try{fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({type:'drawResult',className:lastResult.className,name:lastResult.name,phone:lastResult.phone,slot:String(lastResult.slot),prize:drawWinner.rank+' '+(drawWinner.name||'')})});}catch(e){console.warn('뽑기저장실패',e);}}
+  },800);}
 }
 function closeDraw(){document.getElementById('drawOverlay').classList.remove('show');}
 
