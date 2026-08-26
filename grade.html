@@ -436,13 +436,16 @@ async function submitAnswers(){
   document.getElementById('btnTxt').innerHTML='<span class="spinner"></span> 채점 중...';
   document.getElementById('failCard').classList.remove('show');
 
-  // 채점
-  var correctArr=ak.answers.map(function(x){return parseInt(x);});
+  // 채점 (복수정답 지원: "3|5" 형태 = 3번 또는 5번 정답)
+  var correctArr=ak.answers.map(function(x){
+    return String(x).split('|').map(function(v){return parseInt(v);}).filter(function(v){return !isNaN(v);});
+  });
   var correct=0, results=[];
   for(var i=0;i<numQ;i++){
-    var ok=answers[i]===correctArr[i];
+    var validAnswers = correctArr[i] || [];
+    var ok = validAnswers.indexOf(answers[i]) !== -1;
     if(ok)correct++;
-    results.push({q:i+1,my:answers[i],ans:correctArr[i],ok:ok});
+    results.push({q:i+1,my:answers[i],ans:validAnswers.join('/'),ok:ok});
   }
   var score=config.submitBase + correct*config.perCorrect;
   lastResult={className:selClass,name:name,phone:phone,slot:selSlot,correct:correct,total:numQ,score:score,results:results,pdf:ak.pdf,answers:answers.slice()};
