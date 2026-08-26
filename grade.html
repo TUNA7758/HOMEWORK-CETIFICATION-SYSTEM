@@ -234,22 +234,40 @@ td{padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap;}
       <div class="stat-card"><div class="stat-label">오답노트 미제출</div><div class="stat-val" style="color:var(--orange)" id="stNoNote">0</div></div>
     </div>
     <div class="cf-btns" id="cfBtns"></div>
+
+    <!-- 주차별 진행 현황 -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title"><div class="cicon ci-blue">📊</div> 주차별 학생 진행 현황
+        <select id="chasiFilter" onchange="renderProgress()" style="margin-left:auto;padding:5px 10px;border-radius:8px;border:1.5px solid var(--border);background:var(--white);font-size:12px;font-family:'Noto Sans KR',sans-serif;"></select>
+      </div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>반</th><th>이름</th><th>정답 제출</th><th>오답노트</th><th>이번주 점수</th></tr></thead>
+        <tbody id="progressBody"><tr><td colspan="5" style="text-align:center;padding:16px;color:var(--text3)">차시를 선택하세요</td></tr></tbody>
+      </table></div>
+    </div>
+
+    <!-- 누적 점수 (기간 기반) -->
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title"><div class="cicon ci-orange">🏆</div> 누적 점수 <span id="periodLabel" style="font-size:11px;color:var(--text3);font-weight:400;margin-left:auto"></span></div>
+      <div id="thresholdInfo" style="font-size:12px;color:var(--text2);margin-bottom:8px;"></div>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>순위</th><th>반</th><th>이름</th><th>정답제출</th><th>오답노트</th><th>누적점수</th></tr></thead>
+        <tbody id="cumulativeBody"></tbody>
+      </table></div>
+      <div style="font-size:11px;color:var(--text3);margin-top:8px">※ 기간·기준점은 시트 <strong>설정</strong> 탭에서 조정하세요.</div>
+    </div>
+
     <div style="display:flex;justify-content:flex-end;margin-bottom:10px;gap:8px;">
       <button class="small-btn" onclick="loadRecords()">🔄 새로고침</button>
       <button class="small-btn" onclick="exportCSV()">📥 CSV</button>
     </div>
     <div class="tbl-wrap">
       <table>
-        <thead><tr><th>반</th><th>이름</th><th>회차</th><th>점수</th><th>정답</th><th>오답노트</th><th>제출시각</th><th>삭제</th></tr></thead>
-        <tbody id="tbody"><tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3);">⏳</td></tr></tbody>
+        <thead><tr><th>반</th><th>이름</th><th>회차</th><th>점수</th><th>정답</th><th>오답노트</th><th>뽑기</th><th>제출시각</th><th>삭제</th></tr></thead>
+        <tbody id="tbody"><tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3);">⏳</td></tr></tbody>
       </table>
     </div>
-    <div class="card" style="margin-top:16px;">
-      <div class="card-title"><div class="cicon ci-orange">🏆</div> 누적 점수 (한 달)</div>
-      <div class="tbl-wrap">
-        <table><thead><tr><th>반</th><th>이름</th><th>누적점수</th><th>제출횟수</th></tr></thead><tbody id="rankBody"></tbody></table>
-      </div>
-    </div>
+
     <div class="card" style="margin-top:16px;">
       <div class="card-title"><div class="cicon ci-purple">🔒</div> 관리</div>
       <button class="small-btn" onclick="lockT()" style="width:100%;">🔒 교사 잠금</button>
@@ -459,7 +477,7 @@ function showScore(correct,total,score,results){
   sc.style.border='1.5px solid '+color;
   document.getElementById('scoreBig').textContent=correct+' / '+total;
   document.getElementById('scoreBig').style.color=color;
-  document.getElementById('scoreSub').textContent='정답률 '+pct+'% · 획득 점수 '+score+'점';
+  document.getElementById('scoreSub').textContent='';
   document.getElementById('gradeFill').style.width=pct+'%';
   document.getElementById('gradeFill').style.background=color;
   document.getElementById('resultGrid').innerHTML=results.map(function(r){
@@ -570,7 +588,7 @@ function tryDraw(){
 function pickWinner(){var t=PRIZES.reduce(function(s,p){return s+p.prob;},0),r=Math.random()*t,c=0;for(var i=0;i<PRIZES.length;i++){c+=PRIZES[i].prob;if(r<c)return PRIZES[i];}return PRIZES[PRIZES.length-1];}
 function boxClick(){
   if(boxState==='idle'){boxState='shaking';var s=document.getElementById('boxScene');s.style.animation='none';requestAnimationFrame(function(){s.style.animation='shake .55s ease';});document.getElementById('drawSub').textContent='흔들흔들...';setTimeout(function(){boxState='ready';document.getElementById('drawSub').textContent='한 번 더!';},600);}
-  else if(boxState==='ready'){boxState='open';document.getElementById('boxLid').classList.add('open');document.getElementById('drawSub').textContent='두근두근...';setTimeout(function(){document.getElementById('drawRank').textContent=drawWinner.rank;document.getElementById('drawResult').classList.add('show');},800);}
+  else if(boxState==='ready'){boxState='open';document.getElementById('boxLid').classList.add('open');document.getElementById('drawSub').textContent='두근두근...';setTimeout(function(){document.getElementById('drawRank').textContent=drawWinner.rank;document.getElementById('drawResult').classList.add('show');if(lastResult){try{fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({type:'drawResult',className:lastResult.className,name:lastResult.name,phone:lastResult.phone,slot:String(lastResult.slot),prize:drawWinner.rank})});}catch(e){console.warn('뽑기저장실패',e);}}},800);}
 }
 function closeDraw(){document.getElementById('drawOverlay').classList.remove('show');}
 
@@ -592,16 +610,24 @@ function lockT(){teacherUnlocked=false;save('grade_teacher',false);showGate();}
 
 // ── 교사: 기록 ──
 function loadRecords(){
-  document.getElementById('tbody').innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3);">⏳</td></tr>';
-  fetch(SCRIPT_URL+'?action=getRecords',{redirect:'follow'})
-    .then(function(r){return r.json();})
-    .then(function(d){records=(d.success&&d.records)?d.records:[];renderDash();})
-    .catch(function(){records=[];renderDash();});
+  document.getElementById('tbody').innerHTML='<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3);">⏳</td></tr>';
+  // 설정 최신값 + 기록 동시 로드
+  Promise.all([
+    fetch(SCRIPT_URL+'?action=getConfig',{redirect:'follow'}).then(function(r){return r.json();}).catch(function(){return {};}),
+    fetch(SCRIPT_URL+'?action=getRecords',{redirect:'follow'}).then(function(r){return r.json();}).catch(function(){return {};})
+  ]).then(function(res){
+    if(res[0].success&&res[0].config)config=res[0].config;
+    records=(res[1].success&&res[1].records)?res[1].records:[];
+    renderDash();
+  });
 }
 
 function getFiltered(){return currentCF==='all'?records:records.filter(function(r){return r.className===currentCF;});}
 
 function renderDash(){
+  // 학생별 누적 점수 미리 계산 (표에 뱃지로 표시)
+  var totalMap={};
+  records.forEach(function(r){var k=r.className+'|'+r.name;if(!totalMap[k])totalMap[k]=0;totalMap[k]+=r.score;});
   // 반 필터
   var names=[];records.forEach(function(r){if(names.indexOf(r.className)===-1)names.push(r.className);});
   var cf=document.getElementById('cfBtns');
@@ -613,22 +639,106 @@ function renderDash(){
   document.getElementById('stAvg').textContent=avg;
   document.getElementById('stNoNote').textContent=f.filter(function(r){return r.noteStatus==='미제출';}).length;
 
+  // 주차별/누적 뷰 갱신
+  renderChasiOptions();
+  renderProgress();
+  renderCumulative();
+
   var tb=document.getElementById('tbody');
-  if(!f.length){tb.innerHTML='<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3);">기록 없음</td></tr>';}
+  if(!f.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3);">기록 없음</td></tr>';}
   else{
     tb.innerHTML=f.map(function(r){
       var noteBadge=r.noteStatus==='만점'?'<span class="badge bg-green">만점</span>':(r.noteStatus==='제출'?(r.noteUrls.length?'<button class="icon-btn" onclick="viewNote(\''+r.noteUrls[0]+'\')">📷</button>':'<span class="badge bg-blue">제출</span>'):'<span class="badge bg-orange">미제출</span>');
-      return '<tr><td>'+r.className.split('/').pop()+'</td><td><strong>'+r.name+'</strong></td><td>'+r.slot+'회</td><td><strong>'+r.score+'</strong></td><td>'+r.correct+'/'+r.total+'</td><td>'+noteBadge+'</td><td style="font-size:11px;color:var(--text3)">'+r.time+'</td><td><button class="icon-btn" onclick="delRec('+r.row+')">🗑</button></td></tr>';
+      var prizeCell = r.prize ? '<span style="font-size:11px;font-weight:600;color:var(--accent2)">'+r.prize+'</span>' : '<span style="color:var(--text3);font-size:11px">-</span>';
+      return '<tr><td>'+r.className.split('/').pop()+'</td><td><strong>'+r.name+'</strong> <span style="font-size:10px;color:var(--accent);background:rgba(59,110,246,.08);padding:2px 6px;border-radius:10px;font-weight:700;margin-left:4px">누적 '+(totalMap[r.className+'|'+r.name]||0)+'점</span></td><td>'+r.slot+'회</td><td><strong>'+r.score+'</strong></td><td>'+r.correct+'/'+r.total+'</td><td>'+noteBadge+'</td><td>'+prizeCell+'</td><td style="font-size:11px;color:var(--text3)">'+r.time+'</td><td><button class="icon-btn" onclick="delRec('+r.row+')">🗑</button></td></tr>';
     }).join('');
   }
-  renderRank(f);
+  
 }
 
-function renderRank(f){
+
+// ── 차시 선택 드롭다운 ──
+function renderChasiOptions(){
+  var sel=document.getElementById('chasiFilter');
+  var chasis=[];
+  records.forEach(function(r){if(r.chasi>0 && chasis.indexOf(r.chasi)===-1)chasis.push(r.chasi);});
+  chasis.sort(function(a,b){return b-a;});
+  var cur=Number(sel.value)||(config.chasi||chasis[0]||1);
+  sel.innerHTML=chasis.length?chasis.map(function(c){return '<option value="'+c+'"'+(c===cur?' selected':'')+'>'+c+'주차</option>';}).join(''):'<option value="0">데이터 없음</option>';
+}
+
+// ── 주차별 진행 현황 ──
+function renderProgress(){
+  var chasi=Number(document.getElementById('chasiFilter').value)||0;
+  var tb=document.getElementById('progressBody');
+  if(!chasi){tb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--text3)">차시 선택</td></tr>';return;}
+  var f=getFiltered().filter(function(r){return r.chasi===chasi;});
+  if(!f.length){tb.innerHTML='<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--text3)">이 주차 기록 없음</td></tr>';return;}
+  // 학생별 집계
   var map={};
-  f.forEach(function(r){var k=r.className+'|'+r.name;if(!map[k])map[k]={className:r.className,name:r.name,total:0,cnt:0};map[k].total+=r.score;map[k].cnt++;});
-  var rows=Object.values(map).sort(function(a,b){return b.total-a.total;});
-  document.getElementById('rankBody').innerHTML=rows.length?rows.map(function(r){return '<tr><td>'+r.className.split('/').pop()+'</td><td><strong>'+r.name+'</strong></td><td><strong style="color:var(--accent)">'+r.total+'점</strong></td><td>'+r.cnt+'회</td></tr>';}).join(''):'<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--text3)">기록 없음</td></tr>';
+  f.forEach(function(r){
+    var k=r.className+'|'+r.name;
+    if(!map[k])map[k]={className:r.className,name:r.name,correctCnt:0,noteCnt:0,noteNeedCnt:0,score:0};
+    map[k].correctCnt++;
+    if(r.correct<r.total)map[k].noteNeedCnt++; // 만점 아니면 오답노트 필요
+    if(r.noteStatus==='제출'||r.noteStatus==='만점')map[k].noteCnt++;
+    map[k].score+=r.score;
+  });
+  var rows=Object.values(map).sort(function(a,b){return a.name.localeCompare(b.name,'ko');});
+  tb.innerHTML=rows.map(function(r){
+    var correctBadge = r.correctCnt>=3?'<span class="badge bg-green">'+r.correctCnt+'/3 ✅</span>':(r.correctCnt>0?'<span class="badge bg-orange">'+r.correctCnt+'/3 ⚠️</span>':'<span class="badge bg-red">0/3 ❌</span>');
+    var noteText, noteBadge;
+    var noteNeeded = r.noteNeedCnt;
+    var noteDone = Math.min(r.noteCnt, r.correctCnt); // 만점 포함
+    if(noteNeeded===0){noteBadge='<span class="badge bg-green">필요없음</span>';}
+    else {
+      var noteSubmit = r.noteCnt - (r.correctCnt - noteNeeded); // 만점 제외한 실제 오답노트
+      if(noteSubmit>=noteNeeded)noteBadge='<span class="badge bg-green">'+noteSubmit+'/'+noteNeeded+' ✅</span>';
+      else if(noteSubmit>0)noteBadge='<span class="badge bg-orange">'+noteSubmit+'/'+noteNeeded+' ⚠️</span>';
+      else noteBadge='<span class="badge bg-red">0/'+noteNeeded+' ❌</span>';
+    }
+    return '<tr><td style="font-size:11px;color:var(--text2)">'+r.className.split('/').pop()+'</td><td><strong>'+r.name+'</strong></td><td>'+correctBadge+'</td><td>'+noteBadge+'</td><td><strong>'+r.score+'점</strong></td></tr>';
+  }).join('');
+}
+
+// ── 누적 점수 ──
+function renderCumulative(){
+  var thr = Number(config.prizeThreshold)||0;
+  var ps = config.periodStart||'', pe = config.periodEnd||'';
+  document.getElementById('periodLabel').textContent = (ps||pe)?('기간: '+(ps||'전체')+' ~ '+(pe||'전체')):'기간: 전체';
+  document.getElementById('thresholdInfo').innerHTML = thr>0 ? ('🏆 확정상품 자격: <strong>'+thr+'점</strong> 이상') : '(기준점 미설정)';
+
+  // 기간 필터
+  function inPeriod(timeStr){
+    if(!ps && !pe) return true;
+    var m=timeStr.match(/(\d+)\.\s*(\d+)\.\s*(오전|오후)\s*(\d+):(\d+)/);
+    if(!m) return true;
+    var yr=new Date().getFullYear();
+    var hh=Number(m[4]); if(m[3]==='오후'&&hh<12)hh+=12; if(m[3]==='오전'&&hh===12)hh=0;
+    var dt=new Date(yr, Number(m[1])-1, Number(m[2]), hh, Number(m[5]));
+    if(ps){var s=new Date(ps+'T00:00:00'); if(dt<s)return false;}
+    if(pe){var e=new Date(pe+'T23:59:59'); if(dt>e)return false;}
+    return true;
+  }
+
+  var bonus = Number(config.wrongBonus)||0;
+  var map={};
+  var f = getFiltered().filter(function(r){return inPeriod(r.time);});
+  f.forEach(function(r){
+    var k=r.className+'|'+r.name;
+    if(!map[k])map[k]={className:r.className,name:r.name,correctCnt:0,noteCnt:0,score:0};
+    map[k].correctCnt++;
+    if(r.noteStatus==='제출'||r.noteStatus==='만점'){map[k].noteCnt++;map[k].score+=r.score+bonus;}
+    else map[k].score+=r.score;
+  });
+  var rows=Object.values(map).sort(function(a,b){return b.score-a.score;});
+  var tb=document.getElementById('cumulativeBody');
+  if(!rows.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--text3)">데이터 없음</td></tr>';return;}
+  tb.innerHTML=rows.map(function(r,i){
+    var trStyle = (thr>0 && r.score>=thr) ? ' style="background:rgba(245,158,11,.08)"' : '';
+    var badge = (thr>0 && r.score>=thr) ? ' <span style="color:var(--orange);font-size:12px">🏆</span>' : '';
+    return '<tr'+trStyle+'><td><strong>'+(i+1)+'</strong></td><td style="font-size:11px;color:var(--text2)">'+r.className.split('/').pop()+'</td><td><strong>'+r.name+'</strong>'+badge+'</td><td>'+r.correctCnt+'회</td><td>'+r.noteCnt+'회</td><td><strong style="color:var(--accent)">'+r.score+'점</strong></td></tr>';
+  }).join('');
 }
 
 function setCF(c,el){currentCF=c;document.querySelectorAll('.cf-btn').forEach(function(b){b.classList.remove('active');});el.classList.add('active');renderDash();}
@@ -636,8 +746,8 @@ function viewNote(url){document.getElementById('modalImg').src=url;document.getE
 function delRec(row){if(!confirm('이 기록을 삭제할까요?'))return;fetch(SCRIPT_URL+'?action=deleteRecord&row='+row,{redirect:'follow'}).then(function(r){return r.json();}).then(function(d){if(d.success)loadRecords();}).catch(function(){loadRecords();});}
 function exportCSV(){
   var f=getFiltered();
-  var rows=[['제출시각','반','이름','번호','회차','맞은개수','총문항','점수','오답노트']];
-  f.forEach(function(r){rows.push([r.time,r.className,r.name,r.phone,r.slot,r.correct,r.total,r.score,r.noteStatus]);});
+  var rows=[['제출시각','반','이름','번호','회차','맞은개수','총문항','점수','오답노트','뽑기']];
+  f.forEach(function(r){rows.push([r.time,r.className,r.name,r.phone,r.slot,r.correct,r.total,r.score,r.noteStatus,r.prize||'']);});
   var csv=rows.map(function(r){return r.map(function(c){return '"'+(c||'').toString().replace(/"/g,'""')+'"';}).join(',');}).join('\n');
   var a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv'}));a.download='채점기록.csv';a.click();
 }
