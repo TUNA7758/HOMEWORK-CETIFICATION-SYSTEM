@@ -161,12 +161,8 @@ td{padding:10px 12px;border-bottom:1px solid var(--border);white-space:nowrap;}
   </div>
 
   <div class="card">
-    <div class="card-title"><div class="cicon ci-orange">🎯</div> 회차 선택</div>
-    <div class="slot-btns" id="slotBtns" style="grid-template-columns:repeat(3,1fr);">
-      <button class="slot-btn" onclick="selectSlot(1)">1회차</button>
-      <button class="slot-btn" onclick="selectSlot(2)">2회차</button>
-      <button class="slot-btn" onclick="selectSlot(3)">3회차</button>
-    </div>
+    <div class="card-title"><div class="cicon ci-orange">🎯</div> 회차 선택 <span id="chasiInfo" style="font-size:12px;color:var(--text3);font-weight:400;margin-left:auto"></span></div>
+    <div class="slot-btns" id="slotBtns"></div>
     <div id="slotInfo" style="font-size:12px;color:var(--text3);margin-top:8px;"></div>
   </div>
 
@@ -312,7 +308,7 @@ function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 
 // ── 상태 ──
 var config={submitBase:10,perCorrect:1,wrongBonus:5,chasi:1};
-var answerKeys={}, classes=[], students=[], records=[];
+var answerKeys={}, classes=[], students=[], records=[], deadlines={};
 var selClass=null, selSlot=null, answers=[], numQ=0;
 var lastResult=null, uploadedImgs=[], drawUnlocked=false, drawWinner=null, boxState='idle';
 var pwBuf='', teacherUnlocked=load('grade_teacher',false);
@@ -330,6 +326,7 @@ function loadConfig(){
       if(d.success){
         config=d.config||config;
         answerKeys=d.answers||{};
+        deadlines=d.deadlines||{};
         classes=d.classes||[];
         students=d.students||[];
       }
@@ -354,14 +351,41 @@ function selClassFn(c){
 }
 
 function renderSlots(){
-  for(var i=1;i<=3;i++){
-    var btn=document.querySelector('#slotBtns button:nth-child('+i+')');
-    var key=selClass+'|'+i;
-    var has=answerKeys[key];
-    btn.className='slot-btn'+(selSlot===i?' selected':'');
-    btn.disabled=!has;
-    btn.style.opacity=has?'1':'0.4';
+  // 이 반에 등록된 회차들만 자동으로 뽑아 정렬
+  var mySlots = [];
+  Object.keys(answerKeys).forEach(function(k){
+    var parts = k.split('|');
+    if(parts[0]===selClass){ var s=Number(parts[1]); if(s>0 && mySlots.indexOf(s)===-1) mySlots.push(s); }
+  });
+  mySlots.sort(function(a,b){return a-b;});
+
+  var btns = document.getElementById('slotBtns');
+  if(!mySlots.length){
+    btns.style.gridTemplateColumns='1fr';
+    btns.innerHTML='<div style="text-align:center;padding:16px;color:var(--text3);font-size:13px">아직 등록된 회차가 없어요</div>';
+    document.getElementById('chasiInfo').textContent='';
+    return;
   }
+  // 현재 차시 표시
+  var chasi = (config && config.chasi) ? config.chasi : '';
+  document.getElementById('chasiInfo').textContent = chasi ? (chasi+'주차') : '';
+
+  btns.style.gridTemplateColumns='repeat('+Math.min(mySlots.length,4)+',1fr)';
+  btns.innerHTML = mySlots.map(function(s){
+    var dl = (typeof deadlines!=='undefined' && deadlines) ? deadlines[selClass+'|'+s] : null;
+    var dlText = '';
+    if(dl && dl.date){
+      // "2026-06-20" → "6/20", 시간 "02:00" → "새벽2시"
+      var d = dl.date.split('-'); var md = d.length>=3 ? (parseInt(d[1])+'/'+parseInt(d[2])) : dl.date;
+      var t = dl.time || '';
+      var tp = t.split(':'); var hh = parseInt(tp[0])||0;
+      var tText = hh===0?'자정':(hh<6?'새벽 '+hh+'시':(hh<12?'오전 '+hh+'시':(hh===12?'낮 12시':'오후 '+(hh-12)+'시')));
+      if(tp[1] && parseInt(tp[1])>0) tText += ' '+parseInt(tp[1])+'분';
+      dlText = '<div style="font-size:10px;color:var(--text3);font-weight:400;margin-top:3px;line-height:1.3">~'+md+'<br>'+tText+'</div>';
+    }
+    var cls='slot-btn'+(selSlot===s?' selected':'');
+    return '<button class="'+cls+'" onclick="selectSlot('+s+')">'+s+'회차'+dlText+'</button>';
+  }).join('');
 }
 
 function selectSlot(slot){
