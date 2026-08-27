@@ -317,7 +317,7 @@ function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 var config={submitBase:10,perCorrect:1,wrongBonus:5,chasi:1};
 var answerKeys={}, classes=[], students=[], records=[], deadlines={};
 var selClass=null, selSlot=null, answers=[], numQ=0;
-var lastResult=null, uploadedImgs=[], drawUnlocked=false, drawWinner=null, boxState='idle';
+var lastResult=null, uploadedImgs=[], drawUnlocked=false, drawDone=false, drawWinner=null, boxState='idle';
 var pwBuf='', teacherUnlocked=load('grade_teacher',false);
 var currentCF='all';
 
@@ -478,6 +478,8 @@ function checkReady(){
 
 function resetOmr(){
   selSlot=null;answers=[];numQ=0;
+  drawUnlocked=false;drawDone=false;drawWinner=null;boxState='idle';
+  uploadedImgs=[];
   document.getElementById('omrCard').style.display='none';
   document.getElementById('btnSubmit').style.display='none';
   document.getElementById('scoreCard').classList.remove('show');
@@ -679,6 +681,7 @@ function setProg(l,p){var w=document.getElementById('progressWrap');if(p<0){w.st
 function tryDraw(){
   if(isLateForSlot()){alert('⏰ 마감 시간이 지나 뽑기에 참여할 수 없어요.');return;}
   if(!drawUnlocked){alert('오답노트를 먼저 올려주세요!');return;}
+  if(drawDone){alert('이미 뽑기를 완료했어요! 회차당 1번만 가능해요.');return;}
   drawWinner=pickWinner();boxState='idle';
   document.getElementById('boxLid').classList.remove('open');
   document.getElementById('drawResult').classList.remove('show');
@@ -693,6 +696,11 @@ function boxClick(){
     document.getElementById('drawRank').textContent=drawWinner.rank;
     document.getElementById('drawPrizeName').textContent=drawWinner.name||'';
     document.getElementById('drawResult').classList.add('show');
+    // 뽑기 완료 처리 → 재시도 차단
+    drawDone=true;
+    drawUnlocked=false;
+    var db=document.getElementById('drawBtn');
+    if(db){db.className='action-btn action-locked';db.innerHTML='✅ 뽑기 완료 ('+(drawWinner.rank)+')';}
     if(lastResult){try{fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({type:'drawResult',className:lastResult.className,name:lastResult.name,phone:lastResult.phone,slot:String(lastResult.slot),prize:drawWinner.rank+' '+(drawWinner.name||'')})});}catch(e){console.warn('뽑기저장실패',e);}}
   },800);}
 }
