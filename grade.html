@@ -658,13 +658,15 @@ function showPastResult(correct,total,score,results,noteStatus){
   } else if(noteStatus==='제출'){
     ws.innerHTML='<div style="font-size:14px;color:var(--green);font-weight:700;text-align:center;margin:14px 0;padding:16px;background:rgba(16,185,129,.08);border:1.5px solid rgba(16,185,129,.3);border-radius:12px;">✅ 오답노트 제출 완료</div>';
   } else {
-    // 아직 오답노트 미제출 → 계속 업로드 가능
+    // 아직 오답노트 미제출 → 마감 여부 상관없이 계속 업로드 가능 (뽑기만 차단됨)
+    ws.innerHTML=originalWrongSectionHTML;
+    uploadedImgs=[];uploadedUrls=[];drawUnlocked=false;drawDone=false;
     if(isLateForSlot()){
-      ws.innerHTML='<div style="font-size:14px;color:var(--red);font-weight:700;text-align:center;margin:14px 0;padding:16px;background:rgba(239,68,68,.08);border:1.5px solid rgba(239,68,68,.3);border-radius:12px;">⏰ 마감 지남 · 오답노트 제출 불가</div>';
-    } else {
-      // wrongSection 원본 HTML 복원 (사진 업로드 UI)
-      ws.innerHTML=originalWrongSectionHTML;
-      uploadedImgs=[];uploadedUrls=[];drawUnlocked=false;drawDone=false;
+      // 마감 지남 안내만 표시 (업로드는 여전히 가능)
+      var notice=document.createElement('div');
+      notice.style.cssText='font-size:12px;color:var(--orange);font-weight:600;text-align:center;margin:0 0 10px;padding:10px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:10px;';
+      notice.innerHTML='⏰ 마감 지남 · 뽑기는 불가하지만 오답노트는 꼭 제출해주세요';
+      ws.insertBefore(notice, ws.firstChild);
     }
   }
   sc.scrollIntoView({behavior:'smooth'});
@@ -699,9 +701,18 @@ function showScore(correct,total,score,results){
 
   var late = isLateForSlot();
 
-  if(late){
-    // 마감 지남 → 뽑기 자체 불가능
-    document.getElementById('wrongSection').innerHTML='<div style="font-size:14px;color:var(--red);font-weight:700;text-align:center;margin:14px 0;padding:16px;background:rgba(239,68,68,.08);border:1.5px solid rgba(239,68,68,.3);border-radius:12px;">⏰ 마감 시간이 지나 뽑기에 참여할 수 없어요.<br><span style="font-size:12px;font-weight:400;color:var(--text2)">채점 결과와 해설지는 그대로 이용 가능해요.</span></div>';
+  if(late && correct===total){
+    // 만점 + 마감 지남 → 오답노트 필요 없고 뽑기도 불가
+    document.getElementById('wrongSection').innerHTML='<div style="font-size:14px;color:var(--orange);font-weight:700;text-align:center;margin:14px 0;padding:16px;background:rgba(245,158,11,.08);border:1.5px solid rgba(245,158,11,.3);border-radius:12px;">🎉 만점!<br><span style="font-size:12px;font-weight:400;color:var(--text2)">⏰ 마감 지나 뽑기는 불가</span></div>';
+    drawUnlocked=false;
+  } else if(late){
+    // 마감 지남 → 뽑기는 불가하지만 오답노트는 꼭 제출해야 함
+    // 오답노트 UI는 원본 그대로 두고, 상단에 안내문만 삽입
+    var ws=document.getElementById('wrongSection');
+    var notice=document.createElement('div');
+    notice.style.cssText='font-size:13px;color:var(--orange);font-weight:700;text-align:center;margin:0 0 12px;padding:12px;background:rgba(245,158,11,.08);border:1.5px solid rgba(245,158,11,.3);border-radius:12px;line-height:1.5;';
+    notice.innerHTML='⏰ 마감 시간이 지났어요<br><span style="font-size:12px;font-weight:400;color:var(--text2)">뽑기는 불가하지만 오답노트는 꼭 제출해주세요</span>';
+    ws.insertBefore(notice, ws.firstChild);
     drawUnlocked=false;
   } else if(correct===total){
     // 만점이면 오답노트 스킵, 바로 뽑기 해제
