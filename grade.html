@@ -777,7 +777,17 @@ function renderDash(){
   if(!f.length){tb.innerHTML='<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--text3);">기록 없음</td></tr>';}
   else{
     tb.innerHTML=f.map(function(r){
-      var noteBadge=r.noteStatus==='만점'?'<span class="badge bg-green">만점</span>':(r.noteStatus==='제출'?(r.noteUrls.length?'<button class="icon-btn" onclick="viewNote(\''+r.noteUrls[0]+'\')">📷</button>':'<span class="badge bg-blue">제출</span>'):'<span class="badge bg-orange">미제출</span>');
+      var noteBadge;
+      if(r.noteStatus==='만점'){
+        noteBadge='<span class="badge bg-green">만점</span>';
+      } else if(r.noteStatus==='제출'){
+        var photoBtn = r.noteUrls.length ? '<button class="icon-btn" onclick="viewNote(\''+r.noteUrls[0]+'\')" title="사진 보기">📷</button>' : '<span class="badge bg-blue">제출</span>';
+        var undoBtn = '<button class="icon-btn" onclick="toggleNote('+r.row+',\'미제출\')" title="미제출로 변경" style="margin-left:2px;font-size:10px">↺</button>';
+        noteBadge = photoBtn + undoBtn;
+      } else {
+        // 미제출 → 클릭하면 제출로 변경
+        noteBadge='<button class="badge bg-orange" onclick="toggleNote('+r.row+',\'제출\')" style="border:none;cursor:pointer;font-family:inherit" title="클릭: 제출로 변경">미제출 ✓</button>';
+      }
       var prizeCell = r.prize ? '<span style="font-size:11px;font-weight:600;color:var(--accent2)">'+r.prize+'</span>' : '<span style="color:var(--text3);font-size:11px">-</span>';
       return '<tr><td>'+r.className.split('/').pop()+'</td><td><strong>'+r.name+'</strong> <span style="font-size:10px;color:var(--accent);background:rgba(59,110,246,.08);padding:2px 6px;border-radius:10px;font-weight:700;margin-left:4px">누적 '+(totalMap[r.className+'|'+r.name]||0)+'점</span></td><td>'+r.slot+'회</td><td><strong>'+r.score+'</strong></td><td>'+r.correct+'/'+r.total+'</td><td>'+noteBadge+'</td><td>'+prizeCell+'</td><td style="font-size:11px;color:var(--text3)">'+r.time+'</td><td><button class="icon-btn" onclick="delRec('+r.row+')">🗑</button></td></tr>';
     }).join('');
@@ -872,6 +882,19 @@ function renderCumulative(){
 
 function setCF(c,el){currentCF=c;document.querySelectorAll('.cf-btn').forEach(function(b){b.classList.remove('active');});el.classList.add('active');renderDash();}
 function viewNote(url){document.getElementById('modalImg').src=url;document.getElementById('photoModal').classList.add('show');}
+function toggleNote(row,newStatus){
+  var msg = newStatus==='제출'
+    ? '이 학생의 오답노트를 "제출"로 변경할까요?\n(학생이 실제로 제출했지만 시스템에 기록 안 된 경우에만)'
+    : '이 학생의 오답노트를 "미제출"로 되돌릴까요?';
+  if(!confirm(msg))return;
+  fetch(SCRIPT_URL+'?action=setNoteStatus&row='+row+'&status='+encodeURIComponent(newStatus),{redirect:'follow'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.success){loadRecords();}
+      else{alert('변경 실패: '+(d.error||'알 수 없는 오류'));}
+    })
+    .catch(function(){alert('네트워크 오류. 다시 시도해주세요.');});
+}
 function delRec(row){if(!confirm('이 기록을 삭제할까요?'))return;fetch(SCRIPT_URL+'?action=deleteRecord&row='+row,{redirect:'follow'}).then(function(r){return r.json();}).then(function(d){if(d.success)loadRecords();}).catch(function(){loadRecords();});}
 function exportCSV(){
   var f=getFiltered();
