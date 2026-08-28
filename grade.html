@@ -317,7 +317,7 @@ function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 var config={submitBase:10,perCorrect:1,wrongBonus:5,chasi:1};
 var answerKeys={}, classes=[], students=[], records=[], deadlines={};
 var selClass=null, selSlot=null, answers=[], numQ=0;
-var lastResult=null, uploadedImgs=[], drawUnlocked=false, drawDone=false, drawWinner=null, boxState='idle';
+var lastResult=null, uploadedImgs=[], uploadedUrls=[], drawUnlocked=false, drawDone=false, drawWinner=null, boxState='idle';
 var pwBuf='', teacherUnlocked=load('grade_teacher',false);
 var currentCF='all';
 
@@ -360,7 +360,9 @@ function selClassFn(c){
   var btn=document.querySelector('.class-btn[data-c="'+c+'"]');
   if(btn)btn.classList.add('selected');
   document.getElementById('heroBadge').textContent='📚 '+c.split('/').pop();
+  mySubmittedSlots=[]; _lastFetchKey=''; // 반 바뀌면 기존 조회 무효화
   renderSlots(); resetOmr();
+  onInput(); // 이름/번호 이미 입력됐으면 새 반 기준으로 조회
 }
 
 function renderSlots(){
@@ -396,15 +398,25 @@ function renderSlots(){
       if(tp[1] && parseInt(tp[1])>0) tText += ' '+parseInt(tp[1])+'분';
       dlText = '<div style="font-size:10px;color:var(--text3);font-weight:400;margin-top:3px;line-height:1.3">~'+md+'<br>'+tText+'</div>';
     }
+    // 이미 제출한 회차 → 클릭 시 결과 보기 모드
+    var alreadySubmitted = mySubmittedSlots && mySubmittedSlots.indexOf(s)!==-1;
+    if(alreadySubmitted){
+      return '<button class="slot-btn done" onclick="viewPastResult('+s+')" style="cursor:pointer" title="채점 결과 다시 보기">'+s+'회차<div style="font-size:10px;color:var(--green);font-weight:700;margin-top:3px">✅ 제출완료<br>결과 보기</div></button>';
+    }
     var cls='slot-btn'+(selSlot===s?' selected':'');
     return '<button class="'+cls+'" onclick="selectSlot('+s+')">'+s+'회차'+dlText+'</button>';
   }).join('');
 }
 
 function selectSlot(slot){
+  // 이미 제출한 회차 이중 방어
+  if(mySubmittedSlots && mySubmittedSlots.indexOf(slot)!==-1){
+    alert('이 회차는 이미 제출했어요. 재제출은 불가능해요.\n\n"결과 보기"로 예전 채점 결과를 확인할 수 있어요.');
+    return;
+  }
   var key=selClass+'|'+slot;
   if(!answerKeys[key]){alert('아직 '+slot+'회차 정답이 등록되지 않았어요.');return;}
-  selSlot=slot;
+  selSlot=slot; isViewMode=false;
   numQ=answerKeys[key].count;
   renderSlots();
   buildOmr();
@@ -412,6 +424,8 @@ function selectSlot(slot){
   var infoTxt = slot+'회차 · 총 '+numQ+'문제';
   if(essayCnt>0) infoTxt += ' (객관식 '+(numQ-essayCnt)+' + 서술형 '+essayCnt+')';
   document.getElementById('slotInfo').textContent=infoTxt;
+  document.getElementById('scoreCard').classList.remove('show');
+  document.getElementById('afterCard').style.display='none';
 }
 
 function buildOmr(){
@@ -467,7 +481,29 @@ function updateOmrProgress(){
   document.getElementById('omrProgress').textContent=autoDone+' / '+autoCount;
 }
 
-function onInput(){checkReady();}
+var mySubmittedSlots=[]; // 현재 이름+번호로 이미 제출한 회차 목록
+var _lastFetchKey='';
+
+function onInput(){
+  checkReady();
+  // 이름+번호 4자리 완료 시 서버에서 이미 제출한 회차 조회
+  var name=document.getElementById('stuName').value.trim();
+  var phone=document.getElementById('stuPhone').value.trim();
+  if(selClass && name && phone.length===4){
+    var key=selClass+'|'+name+'|'+phone;
+    if(key===_lastFetchKey)return; // 같은 조합 중복 조회 방지
+    _lastFetchKey=key;
+    fetch(SCRIPT_URL+'?action=getMySubmissions&className='+encodeURIComponent(selClass)+'&name='+encodeURIComponent(name)+'&phone='+encodeURIComponent(phone),{redirect:'follow'})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(d.success){
+          mySubmittedSlots = (d.submitted||[]).map(function(s){return Number(s);});
+          renderSlots(); // 이미 제출한 회차 반영해서 다시 그리기
+        }
+      })
+      .catch(function(){});
+  }
+}
 
 function checkReady(){
   var name=document.getElementById('stuName').value.trim();
@@ -479,7 +515,7 @@ function checkReady(){
 function resetOmr(){
   selSlot=null;answers=[];numQ=0;
   drawUnlocked=false;drawDone=false;drawWinner=null;boxState='idle';
-  uploadedImgs=[];
+  uploadedImgs=[];uploadedUrls=[];
   document.getElementById('omrCard').style.display='none';
   document.getElementById('btnSubmit').style.display='none';
   document.getElementById('scoreCard').classList.remove('show');
@@ -553,6 +589,94 @@ function isLateForSlot(){
   return new Date() > deadlineDt;
 }
 
+// ── 이미 제출한 회차 결과 다시 보기 ──
+var isViewMode = false; // true면 결과 보기 모드 (재제출 불가)
+async function viewPastResult(slot){
+  var name=document.getElementById('stuName').value.trim();
+  var phone=document.getElementById('stuPhone').value.trim();
+  if(!selClass||!name||phone.length!==4){alert('반/이름/번호를 먼저 입력해주세요.');return;}
+  var key=selClass+'|'+slot;
+  var ak=answerKeys[key];
+  if(!ak){alert('정답 정보가 없습니다.');return;}
+
+  // 서버에서 예전 결과 조회
+  try{
+    var resp=await fetch(SCRIPT_URL+'?action=getMyResult&className='+encodeURIComponent(selClass)+'&name='+encodeURIComponent(name)+'&phone='+encodeURIComponent(phone)+'&slot='+slot,{redirect:'follow'});
+    var d=await resp.json();
+    if(!d.success){alert('결과 조회 실패: '+(d.error||''));return;}
+
+    // 결과 재구성 (정답 탭 데이터와 학생 답 조합)
+    selSlot=slot; numQ=ak.count; isViewMode=true;
+    var correctArr=ak.answers.map(function(x){
+      var s=String(x).trim().toUpperCase();
+      if(s==='X')return 'X';
+      return s.split('|').map(function(v){return parseInt(v);}).filter(function(v){return !isNaN(v);});
+    });
+    var results=[];
+    for(var i=0;i<numQ;i++){
+      var myAns=d.studentAnswers[i]||0;
+      if(correctArr[i]==='X'){results.push({q:i+1,my:myAns,ans:'서술형',ok:'X'});continue;}
+      var validAns=correctArr[i]||[];
+      var ok=validAns.indexOf(myAns)!==-1;
+      results.push({q:i+1,my:myAns,ans:validAns.join('/'),ok:ok});
+    }
+    // lastResult 채우기 (해설지 다운로드용)
+    lastResult={className:selClass,name:name,phone:phone,slot:slot,correct:d.correct,total:d.total,score:d.score,results:results,pdf:ak.pdf,answers:d.studentAnswers.slice()};
+
+    // OMR 카드 숨기고 결과 카드로
+    document.getElementById('omrCard').style.display='none';
+    document.getElementById('btnSubmit').style.display='none';
+    document.getElementById('slotInfo').innerHTML='<span style="color:var(--green);font-weight:700">✅ 제출완료 · 결과 보기 모드</span> ('+d.time+')';
+
+    // 결과 표시 (showScore 재활용)
+    showPastResult(d.correct, d.total, d.score, results, d.noteStatus);
+  }catch(e){alert('조회 실패: '+e.message);}
+}
+
+function showPastResult(correct,total,score,results,noteStatus){
+  var pct=Math.round(correct/total*100);
+  var sc=document.getElementById('scoreCard');
+  var color = pct>=80?'var(--green)':(pct>=50?'var(--orange)':'var(--red)');
+  sc.style.background = pct>=80?'rgba(16,185,129,.08)':(pct>=50?'rgba(245,158,11,.08)':'rgba(239,68,68,.08)');
+  sc.style.border='1.5px solid '+color;
+  document.getElementById('scoreBig').textContent=correct+' / '+total;
+  document.getElementById('scoreBig').style.color=color;
+  document.getElementById('scoreSub').textContent='';
+  document.getElementById('gradeFill').style.width=pct+'%';
+  document.getElementById('gradeFill').style.background=color;
+  document.getElementById('resultGrid').innerHTML=results.map(function(r){
+    if(r.ok==='X') return '<div class="rq" style="background:rgba(245,158,11,.15);color:var(--orange)">'+r.q+'<small>서술</small></div>';
+    return '<div class="rq '+(r.ok?'ok':'no')+'">'+r.q+'<small>'+(r.ok?'○':'답'+r.ans)+'</small></div>';
+  }).join('');
+  sc.classList.add('show');
+  document.getElementById('afterCard').style.display='block';
+
+  // 오답노트 섹션: 상태에 따라 분기
+  var ws=document.getElementById('wrongSection');
+  if(noteStatus==='만점'){
+    ws.innerHTML='<div style="font-size:14px;color:var(--green);font-weight:700;text-align:center;margin:14px 0;padding:16px;background:rgba(16,185,129,.08);border:1.5px solid rgba(16,185,129,.3);border-radius:12px;">🎉 만점 (오답노트 불필요)</div>';
+  } else if(noteStatus==='제출'){
+    ws.innerHTML='<div style="font-size:14px;color:var(--green);font-weight:700;text-align:center;margin:14px 0;padding:16px;background:rgba(16,185,129,.08);border:1.5px solid rgba(16,185,129,.3);border-radius:12px;">✅ 오답노트 제출 완료</div>';
+  } else {
+    // 아직 오답노트 미제출 → 계속 업로드 가능
+    if(isLateForSlot()){
+      ws.innerHTML='<div style="font-size:14px;color:var(--red);font-weight:700;text-align:center;margin:14px 0;padding:16px;background:rgba(239,68,68,.08);border:1.5px solid rgba(239,68,68,.3);border-radius:12px;">⏰ 마감 지남 · 오답노트 제출 불가</div>';
+    } else {
+      // wrongSection 원본 HTML 복원 (사진 업로드 UI)
+      ws.innerHTML=originalWrongSectionHTML;
+      uploadedImgs=[];uploadedUrls=[];drawUnlocked=false;drawDone=false;
+    }
+  }
+  sc.scrollIntoView({behavior:'smooth'});
+}
+
+// 오답노트 섹션 원본 HTML 백업 (viewPastResult에서 복원용)
+var originalWrongSectionHTML='';
+window.addEventListener('DOMContentLoaded',function(){
+  var ws=document.getElementById('wrongSection');
+  if(ws) originalWrongSectionHTML=ws.innerHTML;
+});
+
 function showScore(correct,total,score,results){
   document.getElementById('omrCard').style.display='none';
   document.getElementById('btnSubmit').style.display='none';
@@ -596,6 +720,7 @@ function downloadPdf(){
 function handleFiles(files){
   var arr=Array.from(files).filter(function(f){return f.type.startsWith('image/');}).slice(0,10);
   uploadedImgs=[];
+  uploadedUrls=[]; // 새 파일 → 이전 업로드 URL 무효화
   var grid=document.getElementById('previewGrid');
   grid.innerHTML='';
   var loaded=0;
@@ -631,42 +756,60 @@ function compress(dataUrl,cb){
 
 async function autoUploadNotes(){
   var valid=uploadedImgs.filter(function(x){return x;});
-  if(!valid.length)return;
-  setProg('오답노트 업로드 중...',10);
-  var urls=[];
-  var safeClass=lastResult.className.replace(/[^a-zA-Z0-9]/g,'_');
-  var safeName=lastResult.name.replace(/[^a-zA-Z0-9가-힣]/g,'_')||'s';
-  var prefix='wrongnotes/'+safeClass+'/'+config.chasi+'_'+lastResult.slot+'/'+safeName+'_'+Date.now()+'_';
-  for(var i=0;i<valid.length;i++){
-    setProg('업로드 '+(i+1)+'/'+valid.length,Math.round(10+(i+1)/valid.length*80));
-    try{
-      var b64=valid[i].data.split(',')[1];
-      var blob=b64toBlob(b64,'image/jpeg');
-      var url=await uploadSB(blob,prefix+(i+1)+'.jpg');
-      urls.push(url);
-    }catch(e){console.warn('업로드실패',e);}
+  if(!valid.length && !uploadedUrls.length) return;
+  var urls = uploadedUrls.slice(); // 이미 올린 게 있으면 재사용
+  var errors=[];
+
+  // 아직 업로드 안 된 경우만 업로드
+  if(!urls.length && valid.length){
+    setProg('오답노트 업로드 중...',10);
+    var safeClass=lastResult.className.replace(/[^a-zA-Z0-9]/g,'_');
+    var safeName=lastResult.name.replace(/[^a-zA-Z0-9가-힣]/g,'_')||'s';
+    var chasiPart = (config && config.chasi) ? config.chasi : 'w';
+    var prefix='wrongnotes/'+safeClass+'/'+chasiPart+'_'+lastResult.slot+'/'+safeName+'_'+Date.now()+'_';
+    for(var i=0;i<valid.length;i++){
+      setProg('업로드 '+(i+1)+'/'+valid.length,Math.round(10+(i+1)/valid.length*80));
+      try{
+        var b64=valid[i].data.split(',')[1];
+        var blob=b64toBlob(b64,'image/jpeg');
+        var url=await uploadSB(blob,prefix+(i+1)+'.jpg');
+        urls.push(url);
+      }catch(e){
+        console.warn('업로드실패',i,e);
+        errors.push(String(e.message||e).slice(0,80));
+      }
+    }
+    uploadedUrls = urls.slice(); // 다음 재시도 위해 저장
   }
-  // 사진이 하나도 안 올라갔으면 실패 처리 (뽑기 잠금 유지)
+
+  // 사진이 하나도 안 올라갔으면 실패 처리
   if(!urls.length){
     setProg('',-1);
-    alert('❌ 오답노트 사진 업로드 실패\n\n다시 시도해주세요. 인터넷 연결을 확인하거나 사진 크기를 줄여보세요.');
+    alert('❌ 오답노트 사진 업로드 실패\n\n원인: '+(errors[0]||'네트워크 오류')+'\n\n인터넷 연결 확인 후 다시 시도해주세요.');
     return;
   }
-  // 서버에 오답노트 기록 (응답 확인)
+  // 서버에 오답노트 기록 (응답 확인 - 관대하게)
+  setProg('서버 기록 중...',90);
   var saveOk=false;
   try{
     var resp=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({
       type:'wrongNote',className:lastResult.className,name:lastResult.name,phone:lastResult.phone,slot:String(lastResult.slot),photoUrls:urls
     })});
-    var rd=await resp.json();
-    saveOk=(rd && rd.success===true);
-    if(!saveOk) console.warn('서버 저장 실패:',rd);
+    var txt = await resp.text();
+    try {
+      var rd = JSON.parse(txt);
+      saveOk = (rd && rd.success===true);
+      if(!saveOk) console.warn('서버 응답:',rd);
+    } catch(parseErr) {
+      // JSON 파싱 실패지만 HTTP 응답 OK면 성공으로 간주
+      saveOk = resp.ok || resp.status===200;
+      console.warn('응답 파싱 실패, HTTP상태로 판단:',resp.status);
+    }
   }catch(e){console.warn('서버 통신 실패',e);}
   setProg('완료!',100);
   setTimeout(function(){setProg('',-1);},800);
-  // 서버 저장 실패 시 뽑기 잠금 유지
   if(!saveOk){
-    alert('❌ 오답노트가 서버에 저장되지 않았어요.\n\n잠시 후 다시 시도해주세요.');
+    alert('⚠️ 사진은 업로드됐지만 서버 기록에 실패했어요.\n\n"오답노트 올리기" 영역을 다시 눌러 재시도해주세요.\n(사진은 다시 안 올려도 됩니다)');
     return;
   }
   // 마감 지났으면 뽑기 해제 안 함
