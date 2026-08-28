@@ -646,14 +646,29 @@ async function autoUploadNotes(){
       urls.push(url);
     }catch(e){console.warn('업로드실패',e);}
   }
-  // 서버에 오답노트 기록
+  // 사진이 하나도 안 올라갔으면 실패 처리 (뽑기 잠금 유지)
+  if(!urls.length){
+    setProg('',-1);
+    alert('❌ 오답노트 사진 업로드 실패\n\n다시 시도해주세요. 인터넷 연결을 확인하거나 사진 크기를 줄여보세요.');
+    return;
+  }
+  // 서버에 오답노트 기록 (응답 확인)
+  var saveOk=false;
   try{
-    await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({
+    var resp=await fetch(SCRIPT_URL,{method:'POST',headers:{'Content-Type':'text/plain'},body:JSON.stringify({
       type:'wrongNote',className:lastResult.className,name:lastResult.name,phone:lastResult.phone,slot:String(lastResult.slot),photoUrls:urls
     })});
-  }catch(e){}
+    var rd=await resp.json();
+    saveOk=(rd && rd.success===true);
+    if(!saveOk) console.warn('서버 저장 실패:',rd);
+  }catch(e){console.warn('서버 통신 실패',e);}
   setProg('완료!',100);
   setTimeout(function(){setProg('',-1);},800);
+  // 서버 저장 실패 시 뽑기 잠금 유지
+  if(!saveOk){
+    alert('❌ 오답노트가 서버에 저장되지 않았어요.\n\n잠시 후 다시 시도해주세요.');
+    return;
+  }
   // 마감 지났으면 뽑기 해제 안 함
   if(isLateForSlot()){
     var db=document.getElementById('drawBtn');
