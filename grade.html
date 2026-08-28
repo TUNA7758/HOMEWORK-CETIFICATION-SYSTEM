@@ -774,10 +774,9 @@ async function autoUploadNotes(){
   // 아직 업로드 안 된 경우만 업로드
   if(!urls.length && valid.length){
     setProg('오답노트 업로드 중...',10);
-    var safeClass=lastResult.className.replace(/[^a-zA-Z0-9]/g,'_');
-    var safeName=lastResult.name.replace(/[^a-zA-Z0-9가-힣]/g,'_')||'s';
-    var chasiPart = (config && config.chasi) ? config.chasi : 'w';
-    var prefix='wrongnotes/'+safeClass+'/'+chasiPart+'_'+lastResult.slot+'/'+safeName+'_'+Date.now()+'_';
+    // Supabase는 파일 경로에 한글/특수문자 거부 → ASCII만 사용
+    var randId = Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+    var prefix='wrongnotes/'+randId+'_slot'+lastResult.slot+'_';
     for(var i=0;i<valid.length;i++){
       setProg('업로드 '+(i+1)+'/'+valid.length,Math.round(10+(i+1)/valid.length*80));
       try{
