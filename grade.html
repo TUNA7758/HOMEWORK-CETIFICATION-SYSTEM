@@ -384,7 +384,7 @@ function selClassFn(c){
   var btn=document.querySelector('.class-btn[data-c="'+c+'"]');
   if(btn)btn.classList.add('selected');
   document.getElementById('heroBadge').textContent='📚 '+c.split('/').pop();
-  mySubmittedSlots=[]; _lastFetchKey=''; // 반 바뀌면 기존 조회 무효화
+  mySubmittedSlots=[]; myCompletedSlots=[]; _lastFetchKey=''; // 반 바뀌면 기존 조회 무효화
   renderSlots(); resetOmr();
   onInput(); // 이름/번호 이미 입력됐으면 새 반 기준으로 조회
 }
@@ -427,6 +427,15 @@ function renderSlots(){
     if(alreadySubmitted){
       return '<button class="slot-btn done" onclick="viewPastResult('+s+')" style="cursor:pointer" title="채점 결과 다시 보기">'+s+'회차<div style="font-size:10px;color:var(--green);font-weight:700;margin-top:3px">✅ 제출완료<br>결과 보기</div></button>';
     }
+    // 이전 회차 완료 안 됐으면 잠금 (1회차는 예외 - 무조건 열림)
+    if(s > 1){
+      var prevSlot = s - 1;
+      // 이전 회차가 존재하는데 (정답 등록됨) 완료 안 됐으면 잠금
+      var prevExists = answerKeys[selClass+'|'+prevSlot];
+      if(prevExists && myCompletedSlots.indexOf(prevSlot)===-1){
+        return '<button class="slot-btn" disabled style="opacity:.45;cursor:not-allowed;background:#F5F7FA" title="'+prevSlot+'회차를 완료해야 열려요">'+s+'회차<div style="font-size:10px;color:var(--text3);font-weight:600;margin-top:3px">🔒 '+prevSlot+'회차<br>완료 필요</div></button>';
+      }
+    }
     var cls='slot-btn'+(selSlot===s?' selected':'');
     return '<button class="'+cls+'" onclick="selectSlot('+s+')">'+s+'회차'+dlText+'</button>';
   }).join('');
@@ -437,6 +446,15 @@ function selectSlot(slot){
   if(mySubmittedSlots && mySubmittedSlots.indexOf(slot)!==-1){
     alert('이 회차는 이미 제출했어요. 재제출은 불가능해요.\n\n"결과 보기"로 예전 채점 결과를 확인할 수 있어요.');
     return;
+  }
+  // 이전 회차 완료 안 되면 잠금 (이중 방어)
+  if(slot > 1){
+    var prevSlot = slot - 1;
+    var prevExists = answerKeys[selClass+'|'+prevSlot];
+    if(prevExists && myCompletedSlots.indexOf(prevSlot)===-1){
+      alert('🔒 '+prevSlot+'회차를 먼저 완료해야 '+slot+'회차를 열 수 있어요.\n\n'+prevSlot+'회차 정답 제출 + 오답노트까지 마쳐주세요.');
+      return;
+    }
   }
   var key=selClass+'|'+slot;
   if(!answerKeys[key]){alert('아직 '+slot+'회차 정답이 등록되지 않았어요.');return;}
@@ -505,7 +523,8 @@ function updateOmrProgress(){
   document.getElementById('omrProgress').textContent=autoDone+' / '+autoCount;
 }
 
-var mySubmittedSlots=[]; // 현재 이름+번호로 이미 제출한 회차 목록
+var mySubmittedSlots=[]; // 이름+번호로 이미 제출한 회차 목록
+var myCompletedSlots=[]; // 오답노트까지 완료한 회차 (다음 회차 잠금해제 기준)
 var _lastFetchKey='';
 
 function onInput(){
@@ -522,6 +541,7 @@ function onInput(){
       .then(function(d){
         if(d.success){
           mySubmittedSlots = (d.submitted||[]).map(function(s){return Number(s);});
+          myCompletedSlots = (d.completed||[]).map(function(s){return Number(s);});
           renderSlots(); // 이미 제출한 회차 반영해서 다시 그리기
         }
       })
@@ -598,6 +618,9 @@ async function submitAnswers(){
       return;
     }
   }catch(e){console.warn('저장 실패(채점은 표시)',e);}
+
+  // 제출 성공 → 이제 이 회차 재제출 불가
+  if(mySubmittedSlots.indexOf(Number(selSlot))===-1) mySubmittedSlots.push(Number(selSlot));
 
   showScore(correct,total,score,results);
   document.getElementById('btnTxt').innerHTML='✅ 제출 완료';
@@ -742,6 +765,8 @@ function showScore(correct,total,score,results){
     // 만점이면 오답노트 스킵, 바로 뽑기 해제
     document.getElementById('wrongSection').innerHTML='<div style="font-size:14px;color:var(--green);font-weight:700;text-align:center;margin:14px 0;">🎉 만점! 오답노트 없이 바로 뽑기 가능!</div><button class="action-btn action-draw" onclick="tryDraw()">🎁 뽑기 하러가기</button>';
     drawUnlocked=true;
+    // 만점이면 즉시 완료 처리 (다음 회차 열림)
+    if(myCompletedSlots.indexOf(Number(selSlot))===-1) myCompletedSlots.push(Number(selSlot));
   }
   sc.scrollIntoView({behavior:'smooth'});
 }
@@ -852,6 +877,8 @@ async function autoUploadNotes(){
     db.className='action-btn action-locked';
     db.innerHTML='⏰ 마감 지나 뽑기 불가';
     drawUnlocked=false;
+    // 마감 지나도 오답노트는 저장됐으니 다음 회차 열림 처리
+    if(myCompletedSlots.indexOf(Number(lastResult.slot))===-1) myCompletedSlots.push(Number(lastResult.slot));
     return;
   }
   // 뽑기 해제
@@ -859,6 +886,8 @@ async function autoUploadNotes(){
   var db=document.getElementById('drawBtn');
   db.className='action-btn action-draw';
   db.innerHTML='🎁 뽑기 하러가기!';
+  // 오답노트 완료 → 다음 회차 열림 (mySubmittedSlots도 확인)
+  if(myCompletedSlots.indexOf(Number(lastResult.slot))===-1) myCompletedSlots.push(Number(lastResult.slot));
 }
 
 async function uploadSB(blob,path){
