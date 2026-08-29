@@ -330,6 +330,15 @@ function save(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
 
 // ── 상태 ──
 var config={submitBase:10,perCorrect:1,wrongBonus:5,chasi:1};
+
+// 반이름 짧게 표시 (예: 서아카/화요일/성덕고 → 화요일/성덕고)
+function shortClassName(n){
+  if(!n) return '';
+  var parts = String(n).split('/');
+  if(parts.length>=2) return parts.slice(-2).join('/');
+  return parts[parts.length-1];
+}
+
 var answerKeys={}, classes=[], students=[], records=[], deadlines={};
 var selClass=null, selSlot=null, answers=[], numQ=0;
 var lastResult=null, uploadedImgs=[], uploadedUrls=[], drawUnlocked=false, drawDone=false, drawWinner=null, boxState='idle';
@@ -925,10 +934,15 @@ function renderDash(){
   // 학생별 누적 점수 미리 계산 (표에 뱃지로 표시)
   var totalMap={};
   records.forEach(function(r){var k=r.className+'|'+r.name;if(!totalMap[k])totalMap[k]=0;totalMap[k]+=r.score;});
-  // 반 필터
-  var names=[];records.forEach(function(r){if(names.indexOf(r.className)===-1)names.push(r.className);});
+  // 반 필터 - records + matrixData 둘 다에서 반 이름 수집 (아무도 안 낸 반도 표시)
+  var names=[];
+  records.forEach(function(r){if(names.indexOf(r.className)===-1)names.push(r.className);});
+  if(matrixData && matrixData.length){
+    matrixData.forEach(function(r){if(names.indexOf(r.className)===-1)names.push(r.className);});
+  }
+  names.sort(function(a,b){return a.localeCompare(b,'ko');});
   var cf=document.getElementById('cfBtns');
-  cf.innerHTML='<button class="cf-btn'+(currentCF==='all'?' active':'')+'" onclick="setCF(\'all\',this)">전체</button>'+names.map(function(n){return '<button class="cf-btn'+(currentCF===n?' active':'')+'" onclick="setCF(\''+n.replace(/'/g,"\\'")+'\',this)">'+n.split('/').pop()+'</button>';}).join('');
+  cf.innerHTML='<button class="cf-btn'+(currentCF==='all'?' active':'')+'" onclick="setCF(\'all\',this)">전체</button>'+names.map(function(n){return '<button class="cf-btn'+(currentCF===n?' active':'')+'" onclick="setCF(\''+n.replace(/'/g,"\\'")+'\',this)">'+shortClassName(n)+'</button>';}).join('');
 
   var f=getFiltered();
   document.getElementById('stCount').textContent=f.length;
@@ -958,7 +972,7 @@ function renderDash(){
         noteBadge='<button class="badge bg-orange" onclick="toggleNote('+r.row+',\'제출\')" style="border:none;cursor:pointer;font-family:inherit" title="클릭: 제출로 변경">미제출 ✓</button>';
       }
       var prizeCell = r.prize ? '<span style="font-size:11px;font-weight:600;color:var(--accent2)">'+r.prize+'</span>' : '<span style="color:var(--text3);font-size:11px">-</span>';
-      return '<tr><td>'+r.className.split('/').pop()+'</td><td><strong>'+r.name+'</strong> <span style="font-size:10px;color:var(--accent);background:rgba(59,110,246,.08);padding:2px 6px;border-radius:10px;font-weight:700;margin-left:4px">누적 '+(totalMap[r.className+'|'+r.name]||0)+'점</span></td><td>'+r.slot+'회</td><td><strong>'+r.score+'</strong></td><td>'+r.correct+'/'+r.total+'</td><td>'+noteBadge+'</td><td>'+prizeCell+'</td><td style="font-size:11px;color:var(--text3)">'+r.time+'</td><td><button class="icon-btn" onclick="delRec('+r.row+')">🗑</button></td></tr>';
+      return '<tr><td>'+shortClassName(r.className)+'</td><td><strong>'+r.name+'</strong> <span style="font-size:10px;color:var(--accent);background:rgba(59,110,246,.08);padding:2px 6px;border-radius:10px;font-weight:700;margin-left:4px">누적 '+(totalMap[r.className+'|'+r.name]||0)+'점</span></td><td>'+r.slot+'회</td><td><strong>'+r.score+'</strong></td><td>'+r.correct+'/'+r.total+'</td><td>'+noteBadge+'</td><td>'+prizeCell+'</td><td style="font-size:11px;color:var(--text3)">'+r.time+'</td><td><button class="icon-btn" onclick="delRec('+r.row+')">🗑</button></td></tr>';
     }).join('');
   }
   
@@ -1017,7 +1031,7 @@ function renderMatrix(){
     } else {
       nameCell='<td style="'+nameStyle+'">'+r.name+'</td>';
     }
-    return '<tr><td style="font-size:11px;color:var(--text2)">'+r.className.split('/').pop()+'</td>'+nameCell+cells+'</tr>';
+    return '<tr><td style="font-size:11px;color:var(--text2)">'+shortClassName(r.className)+'</td>'+nameCell+cells+'</tr>';
   }).join('');
 }
 
@@ -1074,7 +1088,7 @@ function renderProgress(){
       else if(noteSubmit>0)noteBadge='<span class="badge bg-orange">'+noteSubmit+'/'+noteNeeded+' ⚠️</span>';
       else noteBadge='<span class="badge bg-red">0/'+noteNeeded+' ❌</span>';
     }
-    return '<tr><td style="font-size:11px;color:var(--text2)">'+r.className.split('/').pop()+'</td><td><strong>'+r.name+'</strong></td><td>'+correctBadge+'</td><td>'+noteBadge+'</td><td><strong>'+r.score+'점</strong></td></tr>';
+    return '<tr><td style="font-size:11px;color:var(--text2)">'+shortClassName(r.className)+'</td><td><strong>'+r.name+'</strong></td><td>'+correctBadge+'</td><td>'+noteBadge+'</td><td><strong>'+r.score+'점</strong></td></tr>';
   }).join('');
 }
 
@@ -1114,7 +1128,7 @@ function renderCumulative(){
   tb.innerHTML=rows.map(function(r,i){
     var trStyle = (thr>0 && r.score>=thr) ? ' style="background:rgba(245,158,11,.08)"' : '';
     var badge = (thr>0 && r.score>=thr) ? ' <span style="color:var(--orange);font-size:12px">🏆</span>' : '';
-    return '<tr'+trStyle+'><td><strong>'+(i+1)+'</strong></td><td style="font-size:11px;color:var(--text2)">'+r.className.split('/').pop()+'</td><td><strong>'+r.name+'</strong>'+badge+'</td><td>'+r.correctCnt+'회</td><td>'+r.noteCnt+'회</td><td><strong style="color:var(--accent)">'+r.score+'점</strong></td></tr>';
+    return '<tr'+trStyle+'><td><strong>'+(i+1)+'</strong></td><td style="font-size:11px;color:var(--text2)">'+shortClassName(r.className)+'</td><td><strong>'+r.name+'</strong>'+badge+'</td><td>'+r.correctCnt+'회</td><td>'+r.noteCnt+'회</td><td><strong style="color:var(--accent)">'+r.score+'점</strong></td></tr>';
   }).join('');
 }
 
