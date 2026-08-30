@@ -847,7 +847,7 @@ async function autoUploadNotes(){
     alert('❌ 오답노트 사진 업로드 실패\n\n원인: '+(errors[0]||'네트워크 오류')+'\n\n인터넷 연결 확인 후 다시 시도해주세요.');
     return;
   }
-  // 서버에 오답노트 기록 (응답 확인 - 관대하게)
+  // 서버에 오답노트 기록 (응답 확인 - 관대하게 + 재확인)
   setProg('서버 기록 중...',90);
   var saveOk=false;
   try{
@@ -860,15 +860,30 @@ async function autoUploadNotes(){
       saveOk = (rd && rd.success===true);
       if(!saveOk) console.warn('서버 응답:',rd);
     } catch(parseErr) {
-      // JSON 파싱 실패지만 HTTP 응답 OK면 성공으로 간주
-      saveOk = resp.ok || resp.status===200;
+      // JSON 파싱 실패 - HTTP 200이면 성공으로 간주
+      saveOk = resp.ok || resp.status===200 || resp.status===0;
       console.warn('응답 파싱 실패, HTTP상태로 판단:',resp.status);
     }
   }catch(e){console.warn('서버 통신 실패',e);}
+
+  // 저장 실패로 판단됐어도 실제로는 저장됐을 수 있음 → 서버에 재확인
+  if(!saveOk){
+    setProg('저장 확인 중...',95);
+    try{
+      await new Promise(function(r){setTimeout(r,1500);}); // Apps Script 처리 대기
+      var vresp=await fetch(SCRIPT_URL+'?action=getMySubmissions&className='+encodeURIComponent(lastResult.className)+'&name='+encodeURIComponent(lastResult.name)+'&phone='+encodeURIComponent(lastResult.phone),{redirect:'follow'});
+      var vd=await vresp.json();
+      if(vd.success && vd.completed && vd.completed.indexOf(String(lastResult.slot))!==-1){
+        saveOk = true; // 실제로는 저장됐음!
+        console.log('재확인: 실제로 저장 성공');
+      }
+    }catch(e){console.warn('재확인 실패',e);}
+  }
+
   setProg('완료!',100);
   setTimeout(function(){setProg('',-1);},800);
   if(!saveOk){
-    alert('⚠️ 사진은 업로드됐지만 서버 기록에 실패했어요.\n\n"오답노트 올리기" 영역을 다시 눌러 재시도해주세요.\n(사진은 다시 안 올려도 됩니다)');
+    alert('⚠️ 서버 저장 확인 실패.\n\n"오답노트 올리기" 영역을 다시 눌러 재시도해주세요.\n(사진은 다시 안 올려도 됩니다)');
     return;
   }
   // 마감 지났으면 뽑기 해제 안 함
