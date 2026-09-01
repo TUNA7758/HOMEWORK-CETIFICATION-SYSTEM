@@ -339,7 +339,7 @@ function shortClassName(n){
   return parts[parts.length-1];
 }
 
-var answerKeys={}, classes=[], students=[], records=[], deadlines={};
+var answerKeys={}, classes=[], students=[], records=[], deadlines={}, classWeeks={};
 var selClass=null, selSlot=null, answers=[], numQ=0;
 var lastResult=null, uploadedImgs=[], uploadedUrls=[], drawUnlocked=false, drawDone=false, drawWinner=null, boxState='idle';
 var pwBuf='', teacherUnlocked=load('grade_teacher',false);
@@ -358,6 +358,7 @@ function loadConfig(){
         config=d.config||config;
         answerKeys=d.answers||{};
         deadlines=d.deadlines||{};
+        classWeeks=d.classWeeks||{};
         // 뽑기설정 시트에서 로드 (없으면 기본값 유지)
         if(d.prizes && d.prizes.length){
           PRIZES = d.prizes.map(function(p){
@@ -405,8 +406,8 @@ function renderSlots(){
     document.getElementById('chasiInfo').textContent='';
     return;
   }
-  // 현재 차시 표시
-  var chasi = (config && config.chasi) ? config.chasi : '';
+  // 그 반의 현재 주차 표시 (반설정 탭 기준)
+  var chasi = (classWeeks && classWeeks[selClass]) ? classWeeks[selClass] : ((config && config.chasi) ? config.chasi : '');
   document.getElementById('chasiInfo').textContent = chasi ? (chasi+'주차') : '';
 
   btns.style.gridTemplateColumns='repeat('+Math.min(mySlots.length,4)+',1fr)';
