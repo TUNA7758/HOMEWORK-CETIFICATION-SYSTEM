@@ -1046,18 +1046,17 @@ function loadMatrix(week){
 }
 function renderMatrix(){
   if(!matrixData || !matrixData.length){
-    // 아직 로드 안 됨 - 아무것도 안 함
     return;
   }
   // 반 필터 적용
   var rows = currentCF==='all' ? matrixData : matrixData.filter(function(r){return r.className===currentCF;});
-  // 반→이름 정렬
   rows.sort(function(a,b){var c=a.className.localeCompare(b.className,'ko');return c!==0?c:a.name.localeCompare(b.name,'ko');});
   var tb=document.getElementById('matrixBody');
   if(!rows.length){tb.innerHTML='<tr><td colspan="6" style="text-align:center;padding:16px;color:var(--text3)">학생 없음</td></tr>';return;}
   tb.innerHTML=rows.map(function(r){
     var missing=[];
     var cells='';
+    var argsBase = "'"+encodeURIComponent(r.className)+"','"+encodeURIComponent(r.name)+"','"+encodeURIComponent(r.phone)+"'";
     for(var s=1;s<=4;s++){
       var st=r.slots[s]||'none';
       var mark, style='';
@@ -1065,12 +1064,13 @@ function renderMatrix(){
       else if(st==='perfect'){mark='⭕';style='color:var(--blue);font-weight:700';}
       else if(st==='noNote'){mark='✏️';style='color:var(--orange)';}
       else {mark='❌';style='color:var(--red);font-weight:700';missing.push(s);}
-      cells+='<td style="text-align:center;font-size:16px;'+style+'">'+mark+'</td>';
+      // 셀 클릭 → 상태 변경 팝업
+      cells+='<td style="text-align:center;font-size:16px;cursor:pointer;'+style+'" onclick="editSlot('+argsBase+','+s+',\''+st+'\')" title="클릭: 상태 변경">'+mark+'</td>';
     }
     var nameStyle = missing.length ? 'color:var(--red);font-weight:700;cursor:pointer' : 'font-weight:600';
     var nameCell;
     if(missing.length && r.parPhone){
-      nameCell='<td style="'+nameStyle+'" onclick="alertParent(\''+encodeURIComponent(r.className)+'\',\''+encodeURIComponent(r.name)+'\',\''+encodeURIComponent(r.phone)+'\',\''+missing.join(',')+'\')" title="클릭: 부모님께 알림 문자">'+r.name+' 📱</td>';
+      nameCell='<td style="'+nameStyle+'" onclick="alertParent('+argsBase+',\''+missing.join(',')+'\')" title="클릭: 부모님께 알림 문자">'+r.name+' 📱</td>';
     } else if(missing.length){
       nameCell='<td style="'+nameStyle+'" title="부모님 번호 없음">'+r.name+'</td>';
     } else {
@@ -1078,6 +1078,28 @@ function renderMatrix(){
     }
     return '<tr><td style="font-size:11px;color:var(--text2)">'+shortClassName(r.className)+'</td>'+nameCell+cells+'</tr>';
   }).join('');
+}
+
+// ── 매트릭스 셀 클릭 → 상태 수동 변경 ──
+function editSlot(clsEnc, nameEnc, phoneEnc, slot, currentSt){
+  var name = decodeURIComponent(nameEnc);
+  var stateName = {done:'✅ 완료',perfect:'⭕ 만점',noNote:'✏️ 오답노트 미제출',none:'❌ 미제출'}[currentSt] || '?';
+  var msg = name+' '+slot+'회차 (현재: '+stateName+')\n\n어떻게 변경할까요?\n\n1: ✅ 완료 (제출)\n2: ⭕ 만점 처리\n3: ✏️ 오답노트만 미제출\n4: ❌ 미제출로 되돌리기 (기록 삭제)\n\n숫자 입력 (취소는 그냥 확인):';
+  var choice = prompt(msg, '');
+  if(!choice) return;
+  var actMap = {'1':'markSubmit','2':'markPerfect','3':'markNoteMissing','4':'clear'};
+  var act = actMap[choice.trim()];
+  if(!act){alert('❌ 1~4 사이 숫자만 입력해주세요.');return;}
+  if(act==='clear' && !confirm('정말 이 기록을 삭제할까요?\n(학생이 낸 채점 데이터도 사라져요)'))return;
+  fetch(SCRIPT_URL+'?action=updateSlotStatus&className='+clsEnc+'&name='+nameEnc+'&phone='+phoneEnc+'&slot='+slot+'&act='+act,{redirect:'follow'})
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.success){
+        loadMatrix(); loadRecords();
+      }
+      else{alert('❌ 변경 실패: '+(d.error||''));}
+    })
+    .catch(function(){alert('❌ 네트워크 오류');});
 }
 
 // ── 부모님께 알림 문자 발송 ──
